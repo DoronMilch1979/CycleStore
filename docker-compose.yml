@@ -1,0 +1,22 @@
+# Local PostgreSQL only. This does not provision Neon or any cloud resource.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cyclestore
+      POSTGRES_PASSWORD: cyclestore_dev
+      POSTGRES_DB: cyclestore
+    ports:
+      # Host 15432 avoids Windows Hyper-V excluded ranges that often block 5432.
+      - "15432:5432"
+    volumes:
+      - cyclestore_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cyclestore -d cyclestore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  cyclestore_pg_data:

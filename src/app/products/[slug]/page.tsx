@@ -1,0 +1,142 @@
+import type { Metadata } from "next";
+import Image from "next/image";
+import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { PLACEHOLDER_PRODUCT_SRC, STORE_NAME } from "@/config/site";
+import { AddToCartForm } from "@/components/storefront/add-to-cart-form";
+import { ProductBreadcrumbs } from "@/components/storefront/product-breadcrumbs";
+import { StorefrontShell } from "@/components/storefront/storefront-shell";
+import { Price } from "@/components/ui/price";
+import { getDb } from "@/db";
+import { productImages } from "@/db/schema/catalog";
+import { media } from "@/db/schema/media";
+import { publicMaxSelectableQuantity } from "@/domain/cart/limits";
+import { getProductBySlug, getProductCategoryPath } from "@/domain/catalog/queries";
+import { formatIls } from "@/domain/money";
+import { jsonLdScript } from "@/lib/json-ld";
+import { isDatabaseConfigured } from "@/lib/env";
+import { getSiteUrl } from "@/server/queries/public";
+
+type ProductPageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+export async function generateMetadata({
+  params,
+}: ProductPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  if (!isDatabaseConfigured()) return { title: "מוצר" };
+  const product = await getProductBySlug(getDb(), decodeURIComponent(slug));
+  if (!product) return { title: "מוצר" };
+  return {
+    title: product.name,
+    description: product.description.slice(0, 160) || product.name,
+    alternates: { canonical: `/products/${product.slug}` },
+    openGraph: { title: product.name, description: product.description.slice(0, 160) },
+  };
+}
+
+export default async function ProductPage({
+  params,
+}: ProductPageProps) {
+  if (!isDatabaseConfigured()) notFound();
+  const { slug } = await params;
+  const db = getDb();
+  const product = await getProductBySlug(db, decodeURIComponent(slug));
+  if (!product || !product.isActive) notFound();
+
+  const [images, categoryPath] = await Promise.all([
+    db
+      .select({
+        url: media.url,
+        altText: media.altText,
+        isPrimary: productImages.isPrimary,
+        sortOrder: productImages.sortOrder,
+      })
+      .from(productImages)
+      .innerJoin(media, eq(media.id, productImages.mediaId))
+      .where(eq(productImages.productId, product.id))
+      .orderBy(productImages.sortOrder),
+    getProductCategoryPath(db, product.id),
+  ]);
+
+  const primary = images.find((image) => image.isPrimary) ?? images[0];
+  const inStock = product.stockQuantity > 0;
+  const availability = inStock
+    ? "https://schema.org/InStock"
+    : "https://schema.org/OutOfStock";
+
+  return (
+    <StorefrontShell>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={jsonLdScript({
+          "@type": "Product",
+          name: product.name,
+          description: product.description,
+          image: primary?.url,
+          sku: product.sku ?? undefined,
+          brand: { "@type": "Brand", name: STORE_NAME },
+          offers: {
+            "@type": "Offer",
+            priceCurrency: "ILS",
+            price: product.priceAmount,
+            availability,
+            url: `${getSiteUrl()}/products/${product.slug}`,
+          },
+        })}
+      />
+      <div className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] py-8 sm:py-12">
+        <ProductBreadcrumbs path={categoryPath} productName={product.name} />
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+          <div className="space-y-4">
+            <div className="relative aspect-square overflow-hidden rounded-[var(--radius-lg)] bg-surface-muted">
+              <Image
+                src={primary?.url ?? PLACEHOLDER_PRODUCT_SRC}
+                alt={primary?.altText || product.name}
+                fill
+                className="object-cover"
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                priority
+              />
+            </div>
+            {images.length > 1 ? (
+              <ul className="grid grid-cols-4 gap-2 sm:gap-3">
+                {images.map((image) => (
+                  <li key={image.url} className="relative aspect-square overflow-hidden rounded-md">
+                    <Image
+                      src={image.url}
+                      alt={image.altText || product.name}
+                      fill
+                      className="object-cover"
+                      sizes="120px"
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <div className="space-y-5">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+              {product.name}
+            </h1>
+            <p className="text-xl sm:text-2xl">
+              <Price amount={product.priceAmount} />
+            </p>
+            <p className="whitespace-pre-line text-muted">
+              {product.description || "אין תיאור למוצר זה."}
+            </p>
+            <p className={inStock ? "font-medium text-success" : "font-medium text-danger"}>
+              {inStock ? "במלאי" : "אזל מהמלאי"}
+            </p>
+            <AddToCartForm
+              productId={product.id}
+              maxQuantity={publicMaxSelectableQuantity(product.stockQuantity)}
+            />
+            <p className="sr-only">{formatIls(product.priceAmount)}</p>
+          </div>
+        </div>
+      </div>
+    </StorefrontShell>
+  );
+}

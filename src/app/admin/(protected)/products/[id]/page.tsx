@@ -20,13 +20,16 @@ export default async function EditProductPage({
     db.select().from(productCategories).where(eq(productCategories.productId, id)),
     db
       .select({
+        id: productImages.id,
         url: media.url,
         altText: media.altText,
         isPrimary: productImages.isPrimary,
+        sortOrder: productImages.sortOrder,
       })
       .from(productImages)
       .innerJoin(media, eq(media.id, productImages.mediaId))
-      .where(eq(productImages.productId, id)),
+      .where(eq(productImages.productId, id))
+      .orderBy(asc(productImages.sortOrder), asc(productImages.id)),
   ]);
 
   return (

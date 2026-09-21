@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
   productCategories,
@@ -8,6 +8,7 @@ import {
   productPriceHistory,
   products,
 } from "@/db/schema/catalog";
+import { banners, brandingSettings, homepageContent } from "@/db/schema/content";
 import { media } from "@/db/schema/media";
 import { moneyToDb, parseMoney } from "@/domain/money";
 import { applyStockChange } from "@/domain/inventory/stock-service";
@@ -240,6 +241,147 @@ export async function attachProductImage(
       .returning();
 
     return { media: createdMedia, image };
+  });
+}
+
+async function listProductImages(db: AppDatabase, productId: string) {
+  return db
+    .select()
+    .from(productImages)
+    .where(eq(productImages.productId, productId))
+    .orderBy(asc(productImages.sortOrder), asc(productImages.id));
+}
+
+async function writeImageOrder(
+  db: AppDatabase,
+  orderedIds: string[],
+) {
+  for (const [index, imageId] of orderedIds.entries()) {
+    await db.update(productImages).set({ sortOrder: index }).where(eq(productImages.id, imageId));
+  }
+}
+
+export async function setProductPrimaryImage(db: AppDatabase, productId: string, imageId: string) {
+  await db.transaction(async (tx) => {
+    const database = tx as unknown as AppDatabase;
+    const images = await listProductImages(database, productId);
+    if (!images.some((image) => image.id === imageId)) {
+      throw new AppError({
+        code: "NOT_FOUND",
+        publicMessage: "התמונה לא נמצאה.",
+        httpStatus: 404,
+      });
+    }
+
+    await database
+      .update(productImages)
+      .set({ isPrimary: false })
+      .where(eq(productImages.productId, productId));
+    await database
+      .update(productImages)
+      .set({ isPrimary: true })
+      .where(eq(productImages.id, imageId));
+  });
+}
+
+export async function moveProductImage(
+  db: AppDatabase,
+  productId: string,
+  imageId: string,
+  direction: "up" | "down",
+) {
+  await db.transaction(async (tx) => {
+    const database = tx as unknown as AppDatabase;
+    const images = await listProductImages(database, productId);
+    const index = images.findIndex((image) => image.id === imageId);
+    if (index < 0) {
+      throw new AppError({
+        code: "NOT_FOUND",
+        publicMessage: "התמונה לא נמצאה.",
+        httpStatus: 404,
+      });
+    }
+
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= images.length) {
+      return;
+    }
+
+    const ordered = images.map((image) => image.id);
+    const [moved] = ordered.splice(index, 1);
+    if (!moved) return;
+    ordered.splice(target, 0, moved);
+    await writeImageOrder(database, ordered);
+  });
+}
+
+async function mediaIsUsedElsewhere(db: AppDatabase, mediaId: string) {
+  const [image] = await db
+    .select({ id: productImages.id })
+    .from(productImages)
+    .where(eq(productImages.mediaId, mediaId))
+    .limit(1);
+  if (image) return true;
+
+  const [hero] = await db
+    .select({ id: homepageContent.id })
+    .from(homepageContent)
+    .where(eq(homepageContent.heroMediaId, mediaId))
+    .limit(1);
+  if (hero) return true;
+
+  const [logo] = await db
+    .select({ id: brandingSettings.id })
+    .from(brandingSettings)
+    .where(eq(brandingSettings.logoMediaId, mediaId))
+    .limit(1);
+  if (logo) return true;
+
+  const [banner] = await db
+    .select({ id: banners.id })
+    .from(banners)
+    .where(eq(banners.mediaId, mediaId))
+    .limit(1);
+  return Boolean(banner);
+}
+
+export async function deleteProductImage(db: AppDatabase, productId: string, imageId: string) {
+  return db.transaction(async (tx) => {
+    const database = tx as unknown as AppDatabase;
+    const [image] = await database
+      .select()
+      .from(productImages)
+      .where(and(eq(productImages.id, imageId), eq(productImages.productId, productId)))
+      .limit(1);
+
+    if (!image) {
+      throw new AppError({
+        code: "NOT_FOUND",
+        publicMessage: "התמונה לא נמצאה.",
+        httpStatus: 404,
+      });
+    }
+
+    await database.delete(productImages).where(eq(productImages.id, image.id));
+
+    const remaining = await listProductImages(database, productId);
+    if (image.isPrimary && remaining[0]) {
+      await database
+        .update(productImages)
+        .set({ isPrimary: true })
+        .where(eq(productImages.id, remaining[0].id));
+    }
+    await writeImageOrder(
+      database,
+      remaining.map((row) => row.id),
+    );
+
+    if (await mediaIsUsedElsewhere(database, image.mediaId)) {
+      return null;
+    }
+
+    const [removed] = await database.delete(media).where(eq(media.id, image.mediaId)).returning();
+    return removed?.storageKey ?? null;
   });
 }
 

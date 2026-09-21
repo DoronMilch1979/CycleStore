@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { PLACEHOLDER_PRODUCT_SRC, STORE_NAME } from "@/config/site";
 import { AddToCartForm } from "@/components/storefront/add-to-cart-form";
 import { ProductBreadcrumbs } from "@/components/storefront/product-breadcrumbs";
+import { ProductImageGallery } from "@/components/storefront/product-image-gallery";
 import { StorefrontShell } from "@/components/storefront/storefront-shell";
 import { Price } from "@/components/ui/price";
 import { getDb } from "@/db";
@@ -21,9 +21,7 @@ type ProductPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export async function generateMetadata({
-  params,
-}: ProductPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
   if (!isDatabaseConfigured()) return { title: "מוצר" };
   const product = await getProductBySlug(getDb(), decodeURIComponent(slug));
@@ -36,9 +34,7 @@ export async function generateMetadata({
   };
 }
 
-export default async function ProductPage({
-  params,
-}: ProductPageProps) {
+export default async function ProductPage({ params }: ProductPageProps) {
   if (!isDatabaseConfigured()) notFound();
   const { slug } = await params;
   const db = getDb();
@@ -48,6 +44,7 @@ export default async function ProductPage({
   const [images, categoryPath] = await Promise.all([
     db
       .select({
+        id: productImages.id,
         url: media.url,
         altText: media.altText,
         isPrimary: productImages.isPrimary,
@@ -89,33 +86,11 @@ export default async function ProductPage({
       <div className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] py-8 sm:py-12">
         <ProductBreadcrumbs path={categoryPath} productName={product.name} />
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-          <div className="space-y-4">
-            <div className="relative aspect-square overflow-hidden rounded-[var(--radius-lg)] bg-surface-muted">
-              <Image
-                src={primary?.url ?? PLACEHOLDER_PRODUCT_SRC}
-                alt={primary?.altText || product.name}
-                fill
-                className="object-cover"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                priority
-              />
-            </div>
-            {images.length > 1 ? (
-              <ul className="grid grid-cols-4 gap-2 sm:gap-3">
-                {images.map((image) => (
-                  <li key={image.url} className="relative aspect-square overflow-hidden rounded-md">
-                    <Image
-                      src={image.url}
-                      alt={image.altText || product.name}
-                      fill
-                      className="object-cover"
-                      sizes="120px"
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </div>
+          <ProductImageGallery
+            productName={product.name}
+            images={images}
+            placeholderSrc={PLACEHOLDER_PRODUCT_SRC}
+          />
           <div className="space-y-5">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
               {product.name}
@@ -123,10 +98,12 @@ export default async function ProductPage({
             <p className="text-xl sm:text-2xl">
               <Price amount={product.priceAmount} />
             </p>
-            <p className="whitespace-pre-line text-muted">
+            <p className="text-muted whitespace-pre-line">
               {product.description || "אין תיאור למוצר זה."}
             </p>
-            <p className={inStock ? "font-medium text-success" : "font-medium text-danger"}>
+            <p
+              className={inStock ? "text-success font-medium" : "text-danger font-medium"}
+            >
               {inStock ? "במלאי" : "אזל מהמלאי"}
             </p>
             <AddToCartForm

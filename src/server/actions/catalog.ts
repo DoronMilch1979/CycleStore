@@ -6,7 +6,14 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { banners, brandingSettings, contactFields, homepageContent } from "@/db/schema/content";
 import { createCategory, deleteCategory, moveCategory } from "@/domain/catalog/category-service";
-import { attachProductImage, createProduct, updateProduct } from "@/domain/catalog/product-service";
+import {
+  attachProductImage,
+  createProduct,
+  deleteProductImage,
+  moveProductImage,
+  setProductPrimaryImage,
+  updateProduct,
+} from "@/domain/catalog/product-service";
 import { setStockQuantity } from "@/domain/inventory/stock-service";
 import { assertSafeImageUpload, getMediaStorage } from "@/domain/media/storage";
 import { cacheTags } from "@/lib/cache-tags";
@@ -150,24 +157,83 @@ export async function moveCategoryAction(formData: FormData) {
 export async function uploadProductImageAction(productId: string, formData: FormData) {
   try {
     await requireAdminSession();
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) {
-      return { ok: false as const, error: "יש לבחור קובץ תמונה." };
+    const files = formData
+      .getAll("file")
+      .filter((file): file is File => file instanceof File && file.size > 0);
+    if (files.length === 0) {
+      return { ok: false as const, error: "יש לבחור תמונה." };
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const mediaType = assertSafeImageUpload(file, bytes);
-    const stored = await getMediaStorage().put({
-      bytes,
-      mediaType,
-      originalFilename: file.name,
-    });
-    await attachProductImage(getDb(), {
-      productId,
-      stored,
-      altText: String(formData.get("altText") ?? ""),
-      makePrimary: formData.get("isPrimary") === "on",
-    });
+
+    const prepared = [];
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      prepared.push({
+        file,
+        bytes,
+        mediaType: assertSafeImageUpload(file, bytes),
+      });
+    }
+
+    const makePrimary = prepared.length === 1 && formData.get("isPrimary") === "on";
+    const altText = String(formData.get("altText") ?? "");
+    for (const item of prepared) {
+      const stored = await getMediaStorage().put({
+        bytes: item.bytes,
+        mediaType: item.mediaType,
+        originalFilename: item.file.name,
+      });
+      await attachProductImage(getDb(), {
+        productId,
+        stored,
+        altText,
+        makePrimary,
+      });
+    }
     revalidateCatalog();
+    updateTag(cacheTags.product(productId));
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function deleteProductImageAction(productId: string, imageId: string) {
+  try {
+    await requireAdminSession();
+    const storageKey = await deleteProductImage(getDb(), productId, imageId);
+    if (storageKey) {
+      await getMediaStorage().delete(storageKey);
+    }
+    revalidateCatalog();
+    updateTag(cacheTags.product(productId));
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function setProductPrimaryImageAction(productId: string, imageId: string) {
+  try {
+    await requireAdminSession();
+    await setProductPrimaryImage(getDb(), productId, imageId);
+    revalidateCatalog();
+    updateTag(cacheTags.product(productId));
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function moveProductImageAction(
+  productId: string,
+  imageId: string,
+  direction: "up" | "down",
+) {
+  try {
+    await requireAdminSession();
+    await moveProductImage(getDb(), productId, imageId, direction);
+    revalidateCatalog();
+    updateTag(cacheTags.product(productId));
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };

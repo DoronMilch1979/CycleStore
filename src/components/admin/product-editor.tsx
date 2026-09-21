@@ -7,6 +7,9 @@ import { FieldError, Input, Label, Textarea } from "@/components/ui/input";
 import {
   createCategoryAction,
   createProductAction,
+  deleteProductImageAction,
+  moveProductImageAction,
+  setProductPrimaryImageAction,
   updateProductAction,
   uploadProductImageAction,
 } from "@/server/actions/catalog";
@@ -14,7 +17,13 @@ import { formAction } from "@/lib/form-action";
 
 type CategoryOption = { id: string; name: string; parentId: string | null };
 
-type ProductImage = { url: string; altText: string; isPrimary: boolean };
+type ProductImage = {
+  id: string;
+  url: string;
+  altText: string;
+  isPrimary: boolean;
+  sortOrder: number;
+};
 
 function listCategoriesByDepth(categories: CategoryOption[]) {
   const ids = new Set(categories.map((category) => category.id));
@@ -58,6 +67,9 @@ export function ProductEditor({
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imagePending, setImagePending] = useState(false);
+  const [uploadCount, setUploadCount] = useState(0);
   const [selected, setSelected] = useState<string[]>(initial?.categoryIds ?? []);
   const orderedCategories = listCategoriesByDepth(categories);
 
@@ -172,32 +184,151 @@ export function ProductEditor({
           </Button>
         </form>
         {productId ? (
-          <form
-            className="space-y-3 rounded-[var(--radius-md)] border border-border bg-surface p-4"
-            action={async (formData) => {
-              const result = await uploadProductImageAction(productId, formData);
-              if (!result.ok) setError(result.error);
-            }}
-          >
+          <div className="space-y-3 rounded-[var(--radius-md)] border border-border bg-surface p-4">
             <h2 className="font-semibold">תמונות מוצר</h2>
-            <Input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/avif" />
-            <Input name="altText" placeholder="טקסט חלופי" />
-            <label className="flex items-center gap-2">
-              <input type="checkbox" name="isPrimary" />
-              תמונה ראשית
-            </label>
-            <Button type="submit" variant="secondary">
-              העלאת תמונה
-            </Button>
-            <ul className="space-y-2">
-              {images.map((image) => (
-                <li key={image.url} className="text-sm">
-                  {image.isPrimary ? "ראשית: " : ""}
-                  {image.altText || image.url}
-                </li>
-              ))}
-            </ul>
-          </form>
+            <form
+              className="space-y-3"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                setImagePending(true);
+                setImageError(null);
+                const result = await uploadProductImageAction(productId, new FormData(form));
+                setImagePending(false);
+                if (!result.ok) {
+                  setImageError(result.error);
+                  return;
+                }
+                form.reset();
+                setUploadCount(0);
+                router.refresh();
+              }}
+            >
+              <Input
+                type="file"
+                name="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                multiple
+                onChange={(event) => setUploadCount(event.target.files?.length ?? 0)}
+              />
+              <Input name="altText" placeholder="טקסט חלופי" />
+              {uploadCount > 1 ? (
+                <p className="text-sm text-muted">בהעלאת כמה תמונות לא ניתן לקבוע תמונה ראשית.</p>
+              ) : (
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" name="isPrimary" />
+                  תמונה ראשית
+                </label>
+              )}
+              <Button type="submit" variant="secondary" disabled={imagePending}>
+                העלאת תמונות
+              </Button>
+            </form>
+            {images.length === 0 ? (
+              <p className="text-sm text-muted">אין תמונות למוצר.</p>
+            ) : (
+              <ul className="space-y-3">
+                {images.map((image, index) => (
+                  <li key={image.id} className="flex gap-3 rounded border border-border p-2">
+                    <img
+                      src={image.url}
+                      alt={image.altText || "תמונת מוצר"}
+                      className="h-16 w-16 shrink-0 rounded object-cover"
+                    />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-sm">
+                        {image.isPrimary ? <span className="font-medium">תמונה ראשית</span> : null}
+                        {image.isPrimary && image.altText ? " · " : null}
+                        {image.altText}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {image.isPrimary ? null : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            type="button"
+                            disabled={imagePending}
+                            onClick={async () => {
+                              setImagePending(true);
+                              setImageError(null);
+                              const result = await setProductPrimaryImageAction(productId, image.id);
+                              setImagePending(false);
+                              if (!result.ok) {
+                                setImageError(result.error);
+                                return;
+                              }
+                              router.refresh();
+                            }}
+                          >
+                            קבע כראשית
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          type="button"
+                          disabled={imagePending || index === 0}
+                          onClick={async () => {
+                            setImagePending(true);
+                            setImageError(null);
+                            const result = await moveProductImageAction(productId, image.id, "up");
+                            setImagePending(false);
+                            if (!result.ok) {
+                              setImageError(result.error);
+                              return;
+                            }
+                            router.refresh();
+                          }}
+                        >
+                          למעלה
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          type="button"
+                          disabled={imagePending || index === images.length - 1}
+                          onClick={async () => {
+                            setImagePending(true);
+                            setImageError(null);
+                            const result = await moveProductImageAction(productId, image.id, "down");
+                            setImagePending(false);
+                            if (!result.ok) {
+                              setImageError(result.error);
+                              return;
+                            }
+                            router.refresh();
+                          }}
+                        >
+                          למטה
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          type="button"
+                          disabled={imagePending}
+                          onClick={async () => {
+                            if (!window.confirm("למחוק את התמונה?")) return;
+                            setImagePending(true);
+                            setImageError(null);
+                            const result = await deleteProductImageAction(productId, image.id);
+                            setImagePending(false);
+                            if (!result.ok) {
+                              setImageError(result.error);
+                              return;
+                            }
+                            router.refresh();
+                          }}
+                        >
+                          מחיקה
+                        </Button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <FieldError message={imageError} />
+          </div>
         ) : (
           <p className="text-sm text-muted">לאחר יצירת המוצר ניתן להעלות תמונות.</p>
         )}

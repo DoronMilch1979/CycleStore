@@ -1,11 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { asc, eq } from "drizzle-orm";
+import { productImages } from "@/db/schema/catalog";
 import {
   createCategory,
   deleteCategory,
   listDescendantIds,
   moveCategory,
 } from "@/domain/catalog/category-service";
-import { createProduct } from "@/domain/catalog/product-service";
+import {
+  attachProductImage,
+  createProduct,
+  deleteProductImage,
+  moveProductImage,
+  setProductPrimaryImage,
+} from "@/domain/catalog/product-service";
 import { setStockQuantity } from "@/domain/inventory/stock-service";
 import {
   getCategoryBreadcrumbPath,
@@ -194,5 +202,73 @@ describe("catalog and inventory persistence", () => {
     await expect(getCategoryBreadcrumbPath(db, root.id)).resolves.toEqual([
       { name: "אופניים", slug: "אופניים" },
     ]);
+  });
+
+  it("sets, reorders, and deletes product images", async () => {
+    const test = await createTestDatabase();
+    close = test.close;
+    const { db } = test;
+
+    const category = await createCategory(db, { name: "קסדות" });
+    const product = await createProduct(db, {
+      name: "קסדה",
+      description: "תיאור",
+      price: "100.00",
+      isActive: true,
+      categoryIds: [category.id],
+      stockQuantity: 1,
+    });
+
+    const stored = (key: string) => ({
+      storageKey: key,
+      url: `/media/${key}`,
+      mediaType: "image/jpeg",
+      originalFilename: key,
+      width: null,
+      height: null,
+    });
+
+    const first = await attachProductImage(db, {
+      productId: product.id,
+      stored: stored("a.jpg"),
+      altText: "ראשונה",
+      makePrimary: false,
+    });
+    const second = await attachProductImage(db, {
+      productId: product.id,
+      stored: stored("b.jpg"),
+      altText: "שנייה",
+      makePrimary: false,
+    });
+    const third = await attachProductImage(db, {
+      productId: product.id,
+      stored: stored("c.jpg"),
+      altText: "שלישית",
+      makePrimary: true,
+    });
+
+    const ordered = async () =>
+      db
+        .select()
+        .from(productImages)
+        .where(eq(productImages.productId, product.id))
+        .orderBy(asc(productImages.sortOrder));
+
+    expect((await ordered()).map((row) => row.isPrimary)).toEqual([false, false, true]);
+
+    await moveProductImage(db, product.id, third.image!.id, "up");
+    expect((await ordered()).map((row) => row.id)).toEqual([
+      first.image!.id,
+      third.image!.id,
+      second.image!.id,
+    ]);
+
+    await setProductPrimaryImage(db, product.id, second.image!.id);
+    expect((await ordered()).find((row) => row.isPrimary)?.id).toBe(second.image!.id);
+
+    await deleteProductImage(db, product.id, second.image!.id);
+    const afterDelete = await ordered();
+    expect(afterDelete.map((row) => row.id)).toEqual([first.image!.id, third.image!.id]);
+    expect(afterDelete[0]?.isPrimary).toBe(true);
   });
 });

@@ -26,7 +26,7 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com",
   "font-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   // Next.js still requires 'unsafe-inline' for hydration; 'unsafe-eval' is limited to development.
@@ -61,6 +61,12 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   typedRoutes: true,
+  experimental: {
+    serverActions: {
+      // App uploads allow 5MB. Multipart overhead and the platform body limit sit near 4.5MB.
+      bodySizeLimit: "4.5mb",
+    },
+  },
   ...(!isProduction ? { allowedDevOrigins: lanDevOrigins() } : {}),
   images: {
     formats: ["image/avif", "image/webp"],

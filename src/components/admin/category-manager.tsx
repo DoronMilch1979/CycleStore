@@ -14,7 +14,6 @@ import { formAction } from "@/lib/form-action";
 type Category = {
   id: string;
   name: string;
-  slug: string;
   parentId: string | null;
   isActive: boolean;
 };
@@ -47,7 +46,6 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
         <li key={category.id} style={{ marginInlineStart: depth * 16 }} className="space-y-2 py-2">
           <div className="flex flex-wrap items-center gap-3">
             <span className="font-medium">{category.name}</span>
-            <span className="text-sm text-muted">{category.slug}</span>
             <form action={formAction(moveCategoryAction)} className="flex items-center gap-2">
               <input type="hidden" name="categoryId" value={category.id} />
               <select

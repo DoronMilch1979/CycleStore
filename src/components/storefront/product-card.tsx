@@ -48,8 +48,8 @@ export function ProductCard({ product }: { product: ProductCardData }) {
             {product.inStock ? "במלאי" : "אזל מהמלאי"}
           </p>
         </div>
-        <div className="relative z-10 mt-auto flex items-center justify-between gap-2 px-3 pb-3 pt-3 pointer-events-none sm:px-4 sm:pb-4">
-          <p className="min-w-0">
+        <div className="pointer-events-none relative z-10 mt-auto flex items-center justify-between gap-1 ps-2.5 pe-1.5 pt-2 pb-2 sm:gap-2 sm:px-4 sm:pt-3 sm:pb-4">
+          <p className="min-w-0 shrink text-sm leading-none sm:text-base">
             <Price amount={product.priceAmount} />
           </p>
           <div className="pointer-events-auto">

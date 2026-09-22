@@ -6,8 +6,7 @@ import { QuantityStepper } from "@/components/storefront/quantity-stepper";
 import { assertGuestCartQuantity } from "@/server/actions/cart";
 import { cn } from "@/lib/cn";
 
-const ACTION_SLOT =
-  "flex h-8 w-[6.75rem] shrink-0 items-center justify-end sm:w-[7.25rem]";
+const ACTION_SLOT = "flex h-7 shrink-0 items-center justify-end sm:h-8";
 
 function stopCardNavigation(event: React.SyntheticEvent) {
   event.stopPropagation();
@@ -31,7 +30,7 @@ export function ProductCardAction({
       <div className={ACTION_SLOT} onClick={stopCardNavigation} onPointerDown={stopCardNavigation}>
         <a
           href="/#contact"
-          className="text-end text-[0.7rem] font-medium leading-tight text-muted underline-offset-2 hover:text-primary hover:underline"
+          className="max-w-[5.5rem] text-end text-[0.65rem] font-medium leading-tight text-muted underline-offset-2 hover:text-primary hover:underline sm:max-w-[6.75rem] sm:text-xs"
           onClick={(event) => event.stopPropagation()}
         >
           צור קשר לפרטים נוספים
@@ -45,8 +44,7 @@ export function ProductCardAction({
       <div className={ACTION_SLOT} onClick={stopCardNavigation} onPointerDown={stopCardNavigation}>
         <QuantityStepper
           label="כמות בסל"
-          size="snug"
-          className="w-full"
+          size="compact"
           value={quantity}
           min={0}
           max={maxQuantity}
@@ -86,7 +84,7 @@ export function ProductCardAction({
           });
         }}
         className={cn(
-          "h-8 w-full rounded-[var(--radius-md)] bg-primary px-2 text-[0.7rem] font-medium leading-none text-primary-foreground touch-manipulation hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60 sm:text-xs",
+          "h-7 rounded-[var(--radius-md)] bg-primary px-1.5 text-[0.65rem] font-medium leading-none whitespace-nowrap text-primary-foreground touch-manipulation hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60 sm:h-8 sm:px-2 sm:text-xs",
         )}
       >
         הוספה לסל

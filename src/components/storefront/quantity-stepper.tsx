@@ -19,18 +19,23 @@ export function QuantityStepper({
   max: number;
   disabled?: boolean;
   label: string;
-  size?: "snug" | "comfortable";
+  size?: "compact" | "snug" | "comfortable";
   className?: string;
   onChange: (next: number) => void;
 }) {
   const clamp = (next: number) => Math.min(max, Math.max(min, next));
-  const snug = size === "snug";
+  const compact = size === "compact";
+  const snug = size === "snug" || compact;
 
   return (
     <div
       className={cn(
         "inline-flex items-center",
-        snug ? "h-8" : "rounded-[var(--radius-md)] border border-border bg-surface",
+        compact
+          ? "h-7"
+          : snug
+            ? "h-8"
+            : "rounded-[var(--radius-md)] border border-border bg-surface",
         className,
       )}
     >
@@ -38,9 +43,11 @@ export function QuantityStepper({
         type="button"
         className={cn(
           "shrink-0 touch-manipulation leading-none disabled:opacity-40",
-          snug
-            ? "flex h-8 min-w-7 items-center justify-center rounded-s-[var(--radius-md)] bg-primary px-1.5 text-base font-semibold text-primary-foreground hover:bg-primary-hover"
-            : "flex size-10 items-center justify-center text-lg",
+          compact
+            ? "flex h-7 min-w-6 items-center justify-center rounded-s-[var(--radius-md)] bg-primary px-1 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
+            : snug
+              ? "flex h-8 min-w-7 items-center justify-center rounded-s-[var(--radius-md)] bg-primary px-1.5 text-base font-semibold text-primary-foreground hover:bg-primary-hover"
+              : "flex size-10 items-center justify-center text-lg",
         )}
         aria-label={`הקטנת ${label}`}
         disabled={disabled || value <= min}
@@ -54,9 +61,11 @@ export function QuantityStepper({
         aria-label={label}
         className={cn(
           "text-center tabular-nums",
-          snug
-            ? "flex h-8 min-w-8 items-center justify-center bg-success/10 px-1.5 text-sm font-semibold text-success"
-            : "min-w-8 text-base",
+          compact
+            ? "flex h-7 min-w-5 items-center justify-center bg-success/10 px-1 text-xs font-semibold text-success"
+            : snug
+              ? "flex h-8 min-w-8 items-center justify-center bg-success/10 px-1.5 text-sm font-semibold text-success"
+              : "min-w-8 text-base",
         )}
       >
         {value}
@@ -65,9 +74,11 @@ export function QuantityStepper({
         type="button"
         className={cn(
           "shrink-0 touch-manipulation leading-none disabled:opacity-40",
-          snug
-            ? "flex h-8 min-w-7 items-center justify-center rounded-e-[var(--radius-md)] bg-primary px-1.5 text-base font-semibold text-primary-foreground hover:bg-primary-hover"
-            : "flex size-10 items-center justify-center text-lg",
+          compact
+            ? "flex h-7 min-w-6 items-center justify-center rounded-e-[var(--radius-md)] bg-primary px-1 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
+            : snug
+              ? "flex h-8 min-w-7 items-center justify-center rounded-e-[var(--radius-md)] bg-primary px-1.5 text-base font-semibold text-primary-foreground hover:bg-primary-hover"
+              : "flex size-10 items-center justify-center text-lg",
         )}
         aria-label={`הגדלת ${label}`}
         disabled={disabled || value >= max}

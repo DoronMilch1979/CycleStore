@@ -98,9 +98,12 @@ export async function saveHomepageAction(formData: FormData) {
     const heroAlt = String(formData.get("heroAlt") ?? "");
     const { homepageContent } = await import("@/db/schema/content");
     await getDb()
-      .update(homepageContent)
-      .set({ storyText, heroAlt, updatedAt: new Date() })
-      .where(eq(homepageContent.id, 1));
+      .insert(homepageContent)
+      .values({ id: 1, storyText, heroAlt })
+      .onConflictDoUpdate({
+        target: homepageContent.id,
+        set: { storyText, heroAlt, updatedAt: new Date() },
+      });
     updateTag(cacheTags.homepage);
     revalidatePath("/");
     return { ok: true as const };

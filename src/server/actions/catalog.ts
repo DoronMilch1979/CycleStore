@@ -309,14 +309,15 @@ export async function saveBannerAction(formData: FormData) {
 export async function saveBrandingAction(formData: FormData) {
   try {
     await requireAdminSession();
+    const storeName = String(formData.get("storeName") ?? "");
+    const logoAlt = String(formData.get("logoAlt") ?? "");
     await getDb()
-      .update(brandingSettings)
-      .set({
-        storeName: String(formData.get("storeName") ?? ""),
-        logoAlt: String(formData.get("logoAlt") ?? ""),
-        updatedAt: new Date(),
-      })
-      .where(eq(brandingSettings.id, 1));
+      .insert(brandingSettings)
+      .values({ id: 1, storeName, logoAlt })
+      .onConflictDoUpdate({
+        target: brandingSettings.id,
+        set: { storeName, logoAlt, updatedAt: new Date() },
+      });
     updateTag(cacheTags.branding);
     updateTag(cacheTags.homepage);
     revalidatePath("/");
@@ -356,12 +357,25 @@ export async function uploadHomepageImageAction(formData: FormData) {
         altText: String(formData.get("heroAlt") ?? ""),
       })
       .returning();
-    if (created) {
-      await getDb()
-        .update(homepageContent)
-        .set({ heroMediaId: created.id, heroAlt: created.altText, updatedAt: new Date() })
-        .where(eq(homepageContent.id, 1));
+    if (!created) {
+      return { ok: false as const, error: "שמירת התמונה נכשלה." };
     }
+    await getDb()
+      .insert(homepageContent)
+      .values({
+        id: 1,
+        storyText: "",
+        heroMediaId: created.id,
+        heroAlt: created.altText,
+      })
+      .onConflictDoUpdate({
+        target: homepageContent.id,
+        set: {
+          heroMediaId: created.id,
+          heroAlt: created.altText,
+          updatedAt: new Date(),
+        },
+      });
     updateTag(cacheTags.homepage);
     revalidatePath("/");
     return { ok: true as const };

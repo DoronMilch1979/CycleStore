@@ -3,6 +3,7 @@ import "server-only";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { del, put } from "@vercel/blob";
 import { ALLOWED_IMAGE_MIME_TYPES, MAX_UPLOAD_BYTES } from "@/config/site";
 import { AppError } from "@/lib/errors";
 import { env } from "@/lib/env";
@@ -140,25 +141,59 @@ class LocalDiskStorage implements MediaStorage {
 }
 
 class VercelBlobStorage implements MediaStorage {
-  async put(): Promise<StoredMedia> {
-    throw new AppError({
-      code: "MEDIA_NOT_CONFIGURED",
-      publicMessage: "אחסון הענן עדיין לא הוגדר.",
-      httpStatus: 501,
-    });
+  async put(input: {
+    bytes: Uint8Array;
+    mediaType: string;
+    originalFilename: string;
+  }): Promise<StoredMedia> {
+    const token = env.BLOB_READ_WRITE_TOKEN;
+    if (!token) {
+      throw new AppError({
+        code: "MEDIA_NOT_CONFIGURED",
+        publicMessage: "אחסון הענן עדיין לא הוגדר.",
+        httpStatus: 501,
+      });
+    }
+
+    const ext = MIME_TO_EXT[input.mediaType] ?? "bin";
+    const pathname = `products/${randomUUID()}.${ext}`;
+    try {
+      const blob = await put(pathname, Buffer.from(input.bytes), {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: input.mediaType,
+        token,
+      });
+      return {
+        storageKey: blob.pathname,
+        url: blob.url,
+        mediaType: input.mediaType,
+        originalFilename: input.originalFilename,
+        width: null,
+        height: null,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      console.error("Blob upload failed.");
+      throw new AppError({
+        code: "MEDIA_UPLOAD_FAILED",
+        publicMessage: "העלאת התמונה נכשלה.",
+        cause: error,
+      });
+    }
   }
 
-  async delete(): Promise<void> {
-    throw new AppError({
-      code: "MEDIA_NOT_CONFIGURED",
-      publicMessage: "אחסון הענן עדיין לא הוגדר.",
-      httpStatus: 501,
-    });
+  async delete(storageKey: string): Promise<void> {
+    const token = env.BLOB_READ_WRITE_TOKEN;
+    if (!token || !storageKey || storageKey.includes("..")) return;
+    await del(storageKey, { token }).catch(() => undefined);
   }
 }
 
 export function getMediaStorage(): MediaStorage {
-  if (env.MEDIA_DRIVER === "vercel-blob") {
+  const blobConfigured =
+    env.MEDIA_DRIVER === "vercel-blob" || Boolean(process.env.VERCEL && env.BLOB_READ_WRITE_TOKEN);
+  if (blobConfigured) {
     return new VercelBlobStorage();
   }
   return new LocalDiskStorage();

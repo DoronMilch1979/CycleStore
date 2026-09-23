@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { products } from "@/db/schema/catalog";
 import { CONTACT_FIELD_TYPES } from "@/config/store-content";
@@ -355,13 +355,54 @@ export async function addContactFieldAction(formData: FormData) {
     if (!fieldKey) {
       return { ok: false as const, error: "יש להזין מפתח באנגלית." };
     }
-    await getDb().insert(contactFields).values({
+    const db = getDb();
+    const [latest] = await db
+      .select({ sortOrder: contactFields.sortOrder })
+      .from(contactFields)
+      .orderBy(desc(contactFields.sortOrder))
+      .limit(1);
+    await db.insert(contactFields).values({
       fieldKey,
       fieldType: readContactFieldType(formData.get("fieldType")),
       label: String(formData.get("label") ?? ""),
       value: String(formData.get("value") ?? ""),
       isActive: formData.get("isActive") === "on",
-      sortOrder: Number(formData.get("sortOrder") ?? 100),
+      sortOrder: (latest?.sortOrder ?? -1) + 1,
+    });
+    revalidateContact();
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function reorderContactFieldAction(id: string, direction: "up" | "down") {
+  try {
+    await requireAdminSession();
+    const fieldId = id.trim();
+    if (!fieldId) {
+      return { ok: false as const, error: "חסר מזהה שדה." };
+    }
+    await getDb().transaction(async (tx) => {
+      const rows = await tx
+        .select({ id: contactFields.id })
+        .from(contactFields)
+        .orderBy(asc(contactFields.sortOrder), asc(contactFields.id));
+      const index = rows.findIndex((row) => row.id === fieldId);
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (index < 0 || target < 0 || target >= rows.length) return;
+
+      const ordered = rows.map((row) => row.id);
+      const [moved] = ordered.splice(index, 1);
+      if (!moved) return;
+      ordered.splice(target, 0, moved);
+
+      for (const [sortOrder, rowId] of ordered.entries()) {
+        await tx
+          .update(contactFields)
+          .set({ sortOrder, updatedAt: new Date() })
+          .where(eq(contactFields.id, rowId));
+      }
     });
     revalidateContact();
     return { ok: true as const };

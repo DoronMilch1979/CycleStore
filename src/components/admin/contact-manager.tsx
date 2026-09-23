@@ -9,6 +9,7 @@ import { formAction } from "@/lib/form-action";
 import {
   addContactFieldAction,
   deleteContactFieldAction,
+  reorderContactFieldAction,
   saveContactFieldAction,
 } from "@/server/actions/catalog";
 
@@ -48,6 +49,18 @@ export function ContactManager({ fields }: { fields: Field[] }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<{ fieldId: string; message: string } | null>(null);
 
+  async function onMove(field: Field, direction: "up" | "down") {
+    setPendingId(field.id);
+    setError(null);
+    const result = await reorderContactFieldAction(field.id, direction);
+    setPendingId(null);
+    if (!result.ok) {
+      setError({ fieldId: field.id, message: result.error });
+      return;
+    }
+    router.refresh();
+  }
+
   async function onDelete(field: Field) {
     const confirmed = window.confirm(`למחוק את פרט הקשר "${field.label}"?`);
     if (!confirmed) return;
@@ -66,7 +79,7 @@ export function ContactManager({ fields }: { fields: Field[] }) {
   return (
     <div className="space-y-8">
       <ul className="space-y-6">
-        {fields.map((field) => (
+        {fields.map((field, index) => (
           <li key={field.id} className="rounded-[var(--radius-md)] border border-border bg-surface p-4">
             <form
               className="grid gap-3 md:grid-cols-2"
@@ -91,6 +104,24 @@ export function ContactManager({ fields }: { fields: Field[] }) {
               </label>
               <p className="text-sm text-muted md:col-span-2">מפתח: {field.fieldKey}</p>
               <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={pendingId === field.id || index === 0}
+                  onClick={() => onMove(field, "up")}
+                >
+                  למעלה
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={pendingId === field.id || index === fields.length - 1}
+                  onClick={() => onMove(field, "down")}
+                >
+                  למטה
+                </Button>
                 <Button type="submit">שמירה</Button>
                 <Button
                   type="button"

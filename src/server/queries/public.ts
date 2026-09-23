@@ -206,7 +206,7 @@ async function loadContactFields(): Promise<PublicContactField[]> {
       })
       .from(contactFields)
       .where(and(eq(contactFields.isActive, true)))
-      .orderBy(asc(contactFields.sortOrder)),
+      .orderBy(asc(contactFields.sortOrder), asc(contactFields.id)),
   );
 }
 

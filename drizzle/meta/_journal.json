@@ -8,6 +8,20 @@
       "when": 1790003310992,
       "tag": "0000_quick_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790111858274,
+      "tag": "0001_discount_search_homepage",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790114533681,
+      "tag": "0002_homepage_hero_display",
+      "breakpoints": true
     }
   ]
 }

@@ -96,13 +96,14 @@ export async function saveHomepageAction(formData: FormData) {
     await requireAdminSession();
     const storyText = String(formData.get("storyText") ?? "");
     const heroAlt = String(formData.get("heroAlt") ?? "");
+    const heroDisplay = formData.get("heroDisplay") === "primary" ? "primary" : "slideshow";
     const { homepageContent } = await import("@/db/schema/content");
     await getDb()
       .insert(homepageContent)
-      .values({ id: 1, storyText, heroAlt })
+      .values({ id: 1, storyText, heroAlt, heroDisplay })
       .onConflictDoUpdate({
         target: homepageContent.id,
-        set: { storyText, heroAlt, updatedAt: new Date() },
+        set: { storyText, heroAlt, heroDisplay, updatedAt: new Date() },
       });
     updateTag(cacheTags.homepage);
     revalidatePath("/");

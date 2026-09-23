@@ -59,6 +59,7 @@ export function ProductEditor({
     name: string;
     description: string;
     price: string;
+    discountPrice: string;
     sku: string;
     stockQuantity: number;
     isActive: boolean;
@@ -108,9 +109,19 @@ export function ProductEditor({
           <Input
             id="price"
             name="price"
-            inputMode="decimal"
-            defaultValue={initial?.price ?? "0.00"}
+            inputMode="numeric"
+            defaultValue={initial?.price ?? "0"}
             required
+          />
+        </div>
+        <div>
+          <Label htmlFor="discountPrice">מחיר הנחה (₪)</Label>
+          <Input
+            id="discountPrice"
+            name="discountPrice"
+            inputMode="numeric"
+            defaultValue={initial?.discountPrice ?? ""}
+            placeholder="ללא הנחה"
           />
         </div>
         <div>

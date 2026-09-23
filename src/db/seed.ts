@@ -271,7 +271,7 @@ async function seedDemoProducts(db: AppDatabase, categoryIds: Map<string, string
       slug: product.slug,
       description: product.description,
       sku: product.sku,
-      price: product.price,
+      price: product.price.replace(/\.00$/, ""),
       isActive: true,
       categoryIds: [categoryId],
       stockQuantity: product.stockQuantity,

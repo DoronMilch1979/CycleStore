@@ -8,9 +8,15 @@ import {
   productPriceHistory,
   products,
 } from "@/db/schema/catalog";
-import { banners, brandingSettings, homepageContent } from "@/db/schema/content";
 import { media } from "@/db/schema/media";
+import { deleteMediaIfUnreferenced } from "@/domain/media/references";
 import { moneyToDb, parseMoney } from "@/domain/money";
+import {
+  assertDiscountBelowRegular,
+  discountToDb,
+  parseAdminDiscount,
+  parseAdminPrice,
+} from "@/domain/pricing";
 import { applyStockChange } from "@/domain/inventory/stock-service";
 import { AppError } from "@/lib/errors";
 import { slugify } from "@/lib/slug";
@@ -20,12 +26,20 @@ export type ProductInput = {
   name: string;
   description: string;
   price: string;
+  discountPrice?: string | null;
   sku?: string | null;
   isActive: boolean;
   categoryIds: string[];
   stockQuantity: number;
   slug?: string;
 };
+
+function pricedProduct(input: ProductInput) {
+  const price = parseAdminPrice(input.price);
+  const discount = parseAdminDiscount(input.discountPrice);
+  assertDiscountBelowRegular(discount, price);
+  return { price, discount };
+}
 
 function normalizeSku(sku: string | null | undefined) {
   const value = sku?.trim();
@@ -48,7 +62,7 @@ export async function createProduct(
     });
   }
 
-  const price = parseMoney(input.price);
+  const { price, discount } = pricedProduct(input);
   const slug = input.slug ? slugify(input.slug) : slugify(name);
 
   return db.transaction(async (tx) => {
@@ -60,6 +74,7 @@ export async function createProduct(
         description: input.description.trim(),
         sku: normalizeSku(input.sku),
         priceAmount: moneyToDb(price),
+        discountPriceAmount: discountToDb(discount),
         currency: "ILS",
         stockQuantity: 0,
         isActive: input.isActive,
@@ -108,7 +123,7 @@ export async function updateProduct(
   input: ProductInput,
   actorUserId?: string,
 ) {
-  const price = parseMoney(input.price);
+  const { price, discount } = pricedProduct(input);
   const name = input.name.trim();
   if (!name) {
     throw new AppError({ code: "INVALID_PRODUCT", publicMessage: "יש להזין שם מוצר." });
@@ -143,6 +158,7 @@ export async function updateProduct(
         description: input.description.trim(),
         sku: normalizeSku(input.sku),
         priceAmount: moneyToDb(price),
+        discountPriceAmount: discountToDb(discount),
         isActive: input.isActive,
         updatedAt: new Date(),
       })
@@ -315,36 +331,6 @@ export async function moveProductImage(
   });
 }
 
-async function mediaIsUsedElsewhere(db: AppDatabase, mediaId: string) {
-  const [image] = await db
-    .select({ id: productImages.id })
-    .from(productImages)
-    .where(eq(productImages.mediaId, mediaId))
-    .limit(1);
-  if (image) return true;
-
-  const [hero] = await db
-    .select({ id: homepageContent.id })
-    .from(homepageContent)
-    .where(eq(homepageContent.heroMediaId, mediaId))
-    .limit(1);
-  if (hero) return true;
-
-  const [logo] = await db
-    .select({ id: brandingSettings.id })
-    .from(brandingSettings)
-    .where(eq(brandingSettings.logoMediaId, mediaId))
-    .limit(1);
-  if (logo) return true;
-
-  const [banner] = await db
-    .select({ id: banners.id })
-    .from(banners)
-    .where(eq(banners.mediaId, mediaId))
-    .limit(1);
-  return Boolean(banner);
-}
-
 export async function deleteProductImage(db: AppDatabase, productId: string, imageId: string) {
   return db.transaction(async (tx) => {
     const database = tx as unknown as AppDatabase;
@@ -376,12 +362,7 @@ export async function deleteProductImage(db: AppDatabase, productId: string, ima
       remaining.map((row) => row.id),
     );
 
-    if (await mediaIsUsedElsewhere(database, image.mediaId)) {
-      return null;
-    }
-
-    const [removed] = await database.delete(media).where(eq(media.id, image.mediaId)).returning();
-    return removed?.storageKey ?? null;
+    return deleteMediaIfUnreferenced(database, image.mediaId);
   });
 }
 

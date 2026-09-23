@@ -15,9 +15,10 @@ describe("money", () => {
     expect(() => parseMoney("abc")).toThrow(AppError);
   });
 
-  it("formats prices in Hebrew ILS locale", () => {
-    const formatted = formatIls("1234.5");
-    expect(formatted).toContain("1,234.50");
+  it("formats prices in whole shekels without agorot", () => {
+    const formatted = formatIls("1234.00");
+    expect(formatted).not.toMatch(/[.,]00\b/);
+    expect(formatted).toMatch(/1[,.\u00a0]?234|1234/);
     expect(formatted.includes("₪") || formatted.includes("ILS")).toBe(true);
   });
 

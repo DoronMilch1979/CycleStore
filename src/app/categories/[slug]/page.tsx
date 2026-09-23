@@ -12,7 +12,7 @@ import {
 } from "@/domain/catalog/queries";
 import { getDb } from "@/db";
 import { isDatabaseConfigured } from "@/lib/env";
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { categories } from "@/db/schema/catalog";
 import { STORE_NAME } from "@/config/site";
 
@@ -57,7 +57,8 @@ export default async function CategoryPage({
     db
       .select()
       .from(categories)
-      .where(eq(categories.parentId, category.id)),
+      .where(and(eq(categories.parentId, category.id), eq(categories.isActive, true)))
+      .orderBy(asc(categories.sortOrder), asc(categories.name), asc(categories.id)),
     listProductsInCategoryTree(db, category.id),
     getCachedCategories(),
     getCategoryBreadcrumbPath(db, category.id),
@@ -74,14 +75,13 @@ export default async function CategoryPage({
         {ancestors.length > 0 ? (
           <ProductBreadcrumbs path={ancestors} productName={category.name} />
         ) : null}
-        <header className="mb-8 sm:mb-10">
+        <header className={activeChildren.length > 0 ? "mb-4 sm:mb-5" : "mb-8 sm:mb-10"}>
           <h1 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">
             {category.name}
           </h1>
         </header>
         {activeChildren.length > 0 ? (
-          <section className="mb-10 text-center">
-            <h2 className="mb-5 text-lg font-semibold tracking-tight sm:text-xl">קטגוריות משנה</h2>
+          <section className="mb-6 text-center sm:mb-8">
             <ul className="flex flex-wrap justify-center gap-2 sm:gap-3">
               {activeChildren.map((child) => (
                 <li key={child.id}>

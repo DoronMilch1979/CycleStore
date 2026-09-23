@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { PLACEHOLDER_PRODUCT_SRC } from "@/config/site";
-import { Price } from "@/components/ui/price";
+import { ProductPrice } from "@/components/ui/price";
 import { ProductCardAction } from "@/components/storefront/product-card-action";
 import { publicMaxSelectableQuantity } from "@/domain/cart/limits";
 import { cn } from "@/lib/cn";
@@ -11,6 +11,7 @@ export type ProductCardData = {
   name: string;
   slug: string;
   priceAmount: string;
+  discountPriceAmount: string | null;
   inStock: boolean;
   maxQuantity: number;
   imageUrl: string | null;
@@ -49,8 +50,11 @@ export function ProductCard({ product }: { product: ProductCardData }) {
           </p>
         </div>
         <div className="pointer-events-none relative z-10 mt-auto flex items-center justify-between gap-1 ps-2.5 pe-1.5 pt-2 pb-2 sm:gap-2 sm:px-4 sm:pt-3 sm:pb-4">
-          <p className="min-w-0 shrink text-sm leading-none sm:text-base">
-            <Price amount={product.priceAmount} />
+          <p className="min-w-0 shrink text-sm leading-snug sm:text-base">
+            <ProductPrice
+              priceAmount={product.priceAmount}
+              discountPriceAmount={product.discountPriceAmount}
+            />
           </p>
           <div className="pointer-events-auto">
             <ProductCardAction
@@ -84,6 +88,7 @@ export function toProductCardData(product: {
   name: string;
   slug: string;
   priceAmount: string;
+  discountPriceAmount?: string | null;
   stockQuantity: number;
   imageUrl: string | null;
   imageAlt: string | null;
@@ -93,6 +98,7 @@ export function toProductCardData(product: {
     name: product.name,
     slug: product.slug,
     priceAmount: product.priceAmount,
+    discountPriceAmount: product.discountPriceAmount ?? null,
     inStock: product.stockQuantity > 0,
     maxQuantity: publicMaxSelectableQuantity(product.stockQuantity),
     imageUrl: product.imageUrl,

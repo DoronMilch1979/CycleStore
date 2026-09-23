@@ -4,6 +4,7 @@ import { ProductEditor } from "@/components/admin/product-editor";
 import { getDb } from "@/db";
 import { categories, productCategories, productImages, products } from "@/db/schema/catalog";
 import { media } from "@/db/schema/media";
+import { discountInputValue, wholeShekelDigits } from "@/domain/pricing";
 
 export default async function EditProductPage({
   params,
@@ -42,7 +43,8 @@ export default async function EditProductPage({
         initial={{
           name: product.name,
           description: product.description,
-          price: product.priceAmount,
+          price: wholeShekelDigits(product.priceAmount),
+          discountPrice: discountInputValue(product.discountPriceAmount),
           sku: product.sku ?? "",
           stockQuantity: product.stockQuantity,
           isActive: product.isActive,

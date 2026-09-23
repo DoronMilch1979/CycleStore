@@ -1,11 +1,45 @@
 "use client";
 
-import { STORE_NAME } from "@/config/site";
+import { Suspense } from "react";
+import Image from "next/image";
+import { STORE_LOGO_DESKTOP_SRC, STORE_LOGO_MOBILE_SRC, STORE_NAME } from "@/config/site";
 import { useCart } from "@/components/cart/cart-provider";
+import { DesktopProductSearch, ProductSearch } from "@/components/storefront/product-search";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { PublicCategory } from "@/server/queries/public";
 import { cn } from "@/lib/cn";
+
+function BrandHomeLink({
+  brand,
+  src,
+  width,
+  height,
+  sizes,
+  className,
+  imageClassName,
+}: {
+  brand: string;
+  src: string;
+  width: number;
+  height: number;
+  sizes: string;
+  className: string;
+  imageClassName: string;
+}) {
+  return (
+    <Link href="/" className={className}>
+      <Image
+        src={src}
+        alt={brand}
+        width={width}
+        height={height}
+        sizes={sizes}
+        className={imageClassName}
+      />
+    </Link>
+  );
+}
 
 export function StoreHeader({
   storeName,
@@ -89,12 +123,15 @@ export function StoreHeader({
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-sm">
       <div className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] md:hidden">
-        <Link
-          href="/"
-          className="block truncate py-2.5 text-center text-sm font-medium text-muted transition-colors hover:text-foreground"
-        >
-          {brand}
-        </Link>
+        <BrandHomeLink
+          brand={brand}
+          src={STORE_LOGO_MOBILE_SRC}
+          width={672}
+          height={168}
+          sizes="224px"
+          className="flex justify-center py-2"
+          imageClassName="h-auto max-h-14 w-auto max-w-full"
+        />
         <div className="flex items-center justify-between gap-2 border-t border-border/70">
           {categoryNav()}
           {cartLink()}
@@ -102,14 +139,33 @@ export function StoreHeader({
       </div>
 
       <div className="mx-auto hidden min-h-[var(--header-height)] w-full max-w-[var(--width-content)] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-[var(--space-page)] md:grid">
-        <Link
-          href="/"
-          className="min-w-0 justify-self-start truncate text-sm font-medium text-muted transition-colors hover:text-foreground"
-        >
-          {brand}
-        </Link>
+        <BrandHomeLink
+          brand={brand}
+          src={STORE_LOGO_DESKTOP_SRC}
+          width={768}
+          height={192}
+          sizes="256px"
+          className="inline-flex min-w-0 max-w-full items-center justify-self-start"
+          imageClassName="h-auto max-h-16 w-auto max-w-full"
+        />
         {categoryNav()}
-        <div className="justify-self-end">{cartLink()}</div>
+        <div className="flex items-center justify-self-end">
+          <Suspense fallback={<span className="inline-flex size-11" />}>
+            <DesktopProductSearch />
+          </Suspense>
+          {cartLink()}
+        </div>
+      </div>
+      <div className="border-t border-border/70 md:hidden">
+        <div className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] py-2">
+          <Suspense
+            fallback={
+              <div className="min-h-11 w-full rounded-[var(--radius-md)] border border-border bg-background" />
+            }
+          >
+            <ProductSearch />
+          </Suspense>
+        </div>
       </div>
     </header>
   );

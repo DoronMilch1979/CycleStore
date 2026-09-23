@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { discountInputValue, wholeShekelDigits } from "@/domain/pricing";
 import { updateStockRowAction } from "@/server/actions/inventory";
 
 type Row = {
@@ -10,13 +11,16 @@ type Row = {
   name: string;
   sku: string | null;
   priceAmount: string;
+  discountPriceAmount: string | null;
   stockQuantity: number;
   isActive: boolean;
   categoryName: string | null;
 };
 
 export function InventoryGrid({ rows }: { rows: Row[] }) {
-  const [drafts, setDrafts] = useState<Record<string, { stock: string; price: string }>>({});
+  const [drafts, setDrafts] = useState<
+    Record<string, { stock: string; price: string; discount: string }>
+  >({});
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -36,6 +40,7 @@ export function InventoryGrid({ rows }: { rows: Row[] }) {
             <th className="p-3">מוצר</th>
             <th className="p-3">קטגוריה</th>
             <th className="p-3">מחיר ₪</th>
+            <th className="p-3">מחיר הנחה ₪</th>
             <th className="p-3">מלאי</th>
             <th className="p-3">שמירה</th>
           </tr>
@@ -44,7 +49,8 @@ export function InventoryGrid({ rows }: { rows: Row[] }) {
           {rows.map((row) => {
             const draft = drafts[row.id] ?? {
               stock: String(row.stockQuantity),
-              price: row.priceAmount,
+              price: wholeShekelDigits(row.priceAmount),
+              discount: discountInputValue(row.discountPriceAmount),
             };
             return (
               <tr key={row.id} className="border-b border-border">
@@ -70,6 +76,22 @@ export function InventoryGrid({ rows }: { rows: Row[] }) {
                       }));
                     }}
                     aria-label={`מחיר עבור ${row.name}`}
+                    inputMode="numeric"
+                  />
+                </td>
+                <td className="p-3">
+                  <input
+                    className="w-28 rounded border border-border px-2 py-1"
+                    value={draft.discount}
+                    onChange={(event) => {
+                      setDirty(true);
+                      setDrafts((current) => ({
+                        ...current,
+                        [row.id]: { ...draft, discount: event.target.value },
+                      }));
+                    }}
+                    aria-label={`מחיר הנחה עבור ${row.name}`}
+                    inputMode="numeric"
                   />
                 </td>
                 <td className="p-3">
@@ -96,6 +118,7 @@ export function InventoryGrid({ rows }: { rows: Row[] }) {
                         productId: row.id,
                         stockQuantity: Number(draft.stock),
                         price: draft.price,
+                        discountPrice: draft.discount,
                       });
                       if (result.ok) {
                         setDirty(false);

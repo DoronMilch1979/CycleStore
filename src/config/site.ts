@@ -26,3 +26,7 @@ export const PLACEHOLDER_HERO_SRC = "/placeholders/store-hero.svg";
 export const PLACEHOLDER_PRODUCT_SRC = "/placeholders/product.svg";
 
 export const PLACEHOLDER_LOGO_SRC = "/placeholders/logo.svg";
+
+export const STORE_LOGO_MOBILE_SRC = "/brand/logo-mobile.jpg";
+
+export const STORE_LOGO_DESKTOP_SRC = "/brand/logo-desktop.jpg";

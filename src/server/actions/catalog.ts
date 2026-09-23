@@ -2,10 +2,23 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { getDb } from "@/db";
-import { banners, brandingSettings, contactFields, homepageContent } from "@/db/schema/content";
-import { createCategory, deleteCategory, moveCategory } from "@/domain/catalog/category-service";
+import { products } from "@/db/schema/catalog";
+import { banners, brandingSettings, contactFields } from "@/db/schema/content";
+import {
+  createCategory,
+  deleteCategory,
+  moveCategory,
+  moveCategoryOrder,
+} from "@/domain/catalog/category-service";
+import {
+  attachHomepageImage,
+  deleteHomepageImage,
+  importLegacyHomepageHero,
+  moveHomepageImage,
+  setHomepagePrimaryImage,
+} from "@/domain/content/store-images";
+import { discountInputValue } from "@/domain/pricing";
 import {
   attachProductImage,
   createProduct,
@@ -38,6 +51,7 @@ export async function createProductAction(formData: FormData) {
         name: String(formData.get("name") ?? ""),
         description: String(formData.get("description") ?? ""),
         price: String(formData.get("price") ?? ""),
+        discountPrice: String(formData.get("discountPrice") ?? ""),
         sku: String(formData.get("sku") ?? ""),
         isActive: formData.get("isActive") === "on",
         categoryIds,
@@ -63,6 +77,7 @@ export async function updateProductAction(productId: string, formData: FormData)
         name: String(formData.get("name") ?? ""),
         description: String(formData.get("description") ?? ""),
         price: String(formData.get("price") ?? ""),
+        discountPrice: String(formData.get("discountPrice") ?? ""),
         sku: String(formData.get("sku") ?? ""),
         isActive: formData.get("isActive") === "on",
         categoryIds,
@@ -91,13 +106,22 @@ export async function updateStockAction(formData: FormData) {
       reason: String(formData.get("reason") ?? "עדכון מלאי"),
     });
     if (typeof price === "string" && price.length > 0) {
+      const db = getDb();
+      const [existing] = await db
+        .select({ discountPriceAmount: products.discountPriceAmount })
+        .from(products)
+        .where(eq(products.id, productId))
+        .limit(1);
       await updateProduct(
-        getDb(),
+        db,
         productId,
         {
           name: String(formData.get("name") ?? ""),
           description: String(formData.get("description") ?? ""),
           price,
+          discountPrice: formData.has("discountPrice")
+            ? String(formData.get("discountPrice") ?? "")
+            : discountInputValue(existing?.discountPriceAmount),
           sku: String(formData.get("sku") ?? ""),
           isActive: formData.get("isActive") !== "false",
           categoryIds: formData.getAll("categoryIds").map(String),
@@ -148,6 +172,18 @@ export async function moveCategoryAction(formData: FormData) {
       String(formData.get("parentId") ?? "") || null,
     );
     revalidateCatalog();
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function reorderCategoryAction(categoryId: string, direction: "up" | "down") {
+  try {
+    await requireAdminSession();
+    await moveCategoryOrder(getDb(), categoryId, direction);
+    revalidateCatalog();
+    revalidatePath("/admin/categories");
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };
@@ -327,57 +363,81 @@ export async function saveBrandingAction(formData: FormData) {
   }
 }
 
-const homepageImageSchema = z.object({
-  heroAlt: z.string(),
-});
+function revalidateHomepage() {
+  updateTag(cacheTags.homepage);
+  revalidatePath("/");
+  revalidatePath("/admin/content/homepage");
+}
 
 export async function uploadHomepageImageAction(formData: FormData) {
   try {
     await requireAdminSession();
-    homepageImageSchema.parse({ heroAlt: String(formData.get("heroAlt") ?? "") });
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) {
+    const files = formData
+      .getAll("file")
+      .filter((file): file is File => file instanceof File && file.size > 0);
+    if (files.length === 0) {
       return { ok: false as const, error: "יש לבחור תמונה." };
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const mediaType = assertSafeImageUpload(file, bytes);
-    const stored = await getMediaStorage().put({
-      bytes,
-      mediaType,
-      originalFilename: file.name,
-    });
-    const { media } = await import("@/db/schema/media");
-    const [created] = await getDb()
-      .insert(media)
-      .values({
-        url: stored.url,
-        storageKey: stored.storageKey,
-        mediaType: stored.mediaType,
-        originalFilename: stored.originalFilename,
-        altText: String(formData.get("heroAlt") ?? ""),
-      })
-      .returning();
-    if (!created) {
-      return { ok: false as const, error: "שמירת התמונה נכשלה." };
-    }
-    await getDb()
-      .insert(homepageContent)
-      .values({
-        id: 1,
-        storyText: "",
-        heroMediaId: created.id,
-        heroAlt: created.altText,
-      })
-      .onConflictDoUpdate({
-        target: homepageContent.id,
-        set: {
-          heroMediaId: created.id,
-          heroAlt: created.altText,
-          updatedAt: new Date(),
-        },
+
+    const db = getDb();
+    await importLegacyHomepageHero(db);
+    const makePrimary = files.length === 1 && formData.get("isPrimary") === "on";
+    const altText = String(formData.get("altText") ?? formData.get("heroAlt") ?? "");
+
+    for (const file of files) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const mediaType = assertSafeImageUpload(file, bytes);
+      const stored = await getMediaStorage().put({
+        bytes,
+        mediaType,
+        originalFilename: file.name,
       });
-    updateTag(cacheTags.homepage);
-    revalidatePath("/");
+      await attachHomepageImage(db, { stored, altText, makePrimary });
+    }
+
+    revalidateHomepage();
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function deleteHomepageImageAction(imageId: string) {
+  try {
+    await requireAdminSession();
+    const db = getDb();
+    await importLegacyHomepageHero(db);
+    const storageKey = await deleteHomepageImage(db, imageId);
+    if (storageKey) {
+      await getMediaStorage().delete(storageKey);
+    }
+    revalidateHomepage();
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function setHomepagePrimaryImageAction(imageId: string) {
+  try {
+    await requireAdminSession();
+    const db = getDb();
+    await importLegacyHomepageHero(db);
+    await setHomepagePrimaryImage(db, imageId);
+    revalidateHomepage();
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function moveHomepageImageAction(imageId: string, direction: "up" | "down") {
+  try {
+    await requireAdminSession();
+    const db = getDb();
+    await importLegacyHomepageHero(db);
+    await moveHomepageImage(db, imageId, direction);
+    revalidateHomepage();
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };

@@ -1,13 +1,9 @@
 import { getDb } from "@/db";
-import { categories } from "@/db/schema/catalog";
 import { CategoryManager } from "@/components/admin/category-manager";
-import { asc } from "drizzle-orm";
+import { listCategoriesInDisplayOrder } from "@/domain/catalog/category-service";
 
 export default async function CategoriesPage() {
-  const rows = await getDb()
-    .select()
-    .from(categories)
-    .orderBy(asc(categories.sortOrder), asc(categories.name));
+  const rows = await listCategoriesInDisplayOrder(getDb());
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">ניהול קטגוריות</h1>

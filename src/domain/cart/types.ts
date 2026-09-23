@@ -16,6 +16,8 @@ export type ValidatedCartLine = {
   name: string;
   quantity: number;
   maxQuantity: number;
+  regularPrice: string;
+  discountPrice: string | null;
   unitPrice: string;
   lineTotal: string;
   currency: "ILS";

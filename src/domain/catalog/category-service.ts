@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { categories, categoryClosure, productCategories } from "@/db/schema";
 import type { AppDatabase } from "@/db/types";
 import { AppError } from "@/lib/errors";
@@ -38,6 +38,32 @@ async function assertNotDescendant(
   }
 }
 
+function parentFilter(parentId: string | null) {
+  return parentId ? eq(categories.parentId, parentId) : isNull(categories.parentId);
+}
+
+async function nextSortOrder(db: AppDatabase, parentId: string | null, exceptId?: string) {
+  const filters = [parentFilter(parentId)];
+  if (exceptId) {
+    filters.push(sql`${categories.id} <> ${exceptId}`);
+  }
+  const [row] = await db
+    .select({
+      maxOrder: sql<number>`coalesce(max(${categories.sortOrder}), -1)`,
+    })
+    .from(categories)
+    .where(and(...filters));
+  return Number(row?.maxOrder ?? -1) + 1;
+}
+
+export async function listCategoriesInDisplayOrder(db: AppDatabase, activeOnly = false) {
+  return db
+    .select()
+    .from(categories)
+    .where(activeOnly ? eq(categories.isActive, true) : undefined)
+    .orderBy(asc(categories.sortOrder), asc(categories.name), asc(categories.id));
+}
+
 export async function createCategory(db: AppDatabase, input: CategoryInput) {
   const name = input.name.trim();
   if (!name) {
@@ -50,13 +76,15 @@ export async function createCategory(db: AppDatabase, input: CategoryInput) {
   const slug = input.slug ? slugify(input.slug) : slugify(name);
 
   return db.transaction(async (tx) => {
+    const database = tx as unknown as AppDatabase;
+    const parentId = input.parentId ?? null;
     const [created] = await tx
       .insert(categories)
       .values({
         name,
         slug,
-        parentId: input.parentId ?? null,
-        sortOrder: input.sortOrder ?? 0,
+        parentId,
+        sortOrder: input.sortOrder ?? (await nextSortOrder(database, parentId)),
         isActive: input.isActive ?? true,
       })
       .returning();
@@ -147,9 +175,14 @@ export async function moveCategory(
       ),
     );
 
+    const database = tx as unknown as AppDatabase;
     await tx
       .update(categories)
-      .set({ parentId: newParentId, updatedAt: new Date() })
+      .set({
+        parentId: newParentId,
+        sortOrder: await nextSortOrder(database, newParentId, categoryId),
+        updatedAt: new Date(),
+      })
       .where(eq(categories.id, categoryId));
 
     if (newParentId) {
@@ -184,6 +217,55 @@ export async function moveCategory(
       .where(eq(categories.id, categoryId))
       .limit(1);
     return updated;
+  });
+}
+
+export async function moveCategoryOrder(
+  db: AppDatabase,
+  categoryId: string,
+  direction: "up" | "down",
+) {
+  return db.transaction(async (tx) => {
+    const [category] = await tx
+      .select()
+      .from(categories)
+      .where(eq(categories.id, categoryId))
+      .limit(1);
+
+    if (!category) {
+      throw new AppError({
+        code: "NOT_FOUND",
+        publicMessage: "הקטגוריה לא נמצאה.",
+        httpStatus: 404,
+      });
+    }
+
+    const siblings = await tx
+      .select()
+      .from(categories)
+      .where(parentFilter(category.parentId))
+      .orderBy(asc(categories.sortOrder), asc(categories.name), asc(categories.id));
+
+    const index = siblings.findIndex((sibling) => sibling.id === categoryId);
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || target < 0 || target >= siblings.length) {
+      return category;
+    }
+
+    const ordered = siblings.map((sibling) => sibling.id);
+    const [moved] = ordered.splice(index, 1);
+    if (!moved) return category;
+    ordered.splice(target, 0, moved);
+
+    for (const [sortOrder, id] of ordered.entries()) {
+      await tx
+        .update(categories)
+        .set({ sortOrder, updatedAt: new Date() })
+        .where(eq(categories.id, id));
+    }
+
+    const [updated] = await tx.select().from(categories).where(eq(categories.id, categoryId)).limit(1);
+    return updated ?? category;
   });
 }
 

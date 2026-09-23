@@ -8,7 +8,13 @@ import {
   productPriceHistory,
   products,
 } from "./catalog";
-import { banners, brandingSettings, contactFields, homepageContent } from "./content";
+import {
+  banners,
+  brandingSettings,
+  contactFields,
+  homepageContent,
+  homepageImages,
+} from "./content";
 import { inventoryMovements } from "./inventory";
 import { media } from "./media";
 import { userProfiles } from "./profiles";
@@ -90,6 +96,14 @@ export const productImageRelations = relations(productImages, ({ one }) => ({
 
 export const mediaRelations = relations(media, ({ many }) => ({
   productImages: many(productImages),
+  homepageImages: many(homepageImages),
+}));
+
+export const homepageImageRelations = relations(homepageImages, ({ one }) => ({
+  media: one(media, {
+    fields: [homepageImages.mediaId],
+    references: [media.id],
+  }),
 }));
 
 export const homepageContentRelations = relations(homepageContent, ({ one }) => ({

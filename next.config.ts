@@ -73,6 +73,7 @@ const nextConfig: NextConfig = {
     localPatterns: [
       { pathname: "/placeholders/**" },
       { pathname: "/media/**" },
+      { pathname: "/brand/**" },
     ],
     remotePatterns: [
       {

@@ -6,13 +6,13 @@ import { AddToCartForm } from "@/components/storefront/add-to-cart-form";
 import { ProductBreadcrumbs } from "@/components/storefront/product-breadcrumbs";
 import { ProductImageGallery } from "@/components/storefront/product-image-gallery";
 import { StorefrontShell } from "@/components/storefront/storefront-shell";
-import { Price } from "@/components/ui/price";
+import { ProductPrice } from "@/components/ui/price";
 import { getDb } from "@/db";
 import { productImages } from "@/db/schema/catalog";
 import { media } from "@/db/schema/media";
 import { publicMaxSelectableQuantity } from "@/domain/cart/limits";
 import { getProductBySlug, getProductCategoryPath } from "@/domain/catalog/queries";
-import { formatIls } from "@/domain/money";
+import { getEffectivePrice } from "@/domain/pricing";
 import { jsonLdScript } from "@/lib/json-ld";
 import { isDatabaseConfigured } from "@/lib/env";
 import { getSiteUrl } from "@/server/queries/public";
@@ -77,7 +77,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
           offers: {
             "@type": "Offer",
             priceCurrency: "ILS",
-            price: product.priceAmount,
+            price: getEffectivePrice(product).toFixed(2),
             availability,
             url: `${getSiteUrl()}/products/${product.slug}`,
           },
@@ -96,7 +96,10 @@ export default async function ProductPage({ params }: ProductPageProps) {
               {product.name}
             </h1>
             <p className="text-xl sm:text-2xl">
-              <Price amount={product.priceAmount} />
+              <ProductPrice
+                priceAmount={product.priceAmount}
+                discountPriceAmount={product.discountPriceAmount}
+              />
             </p>
             <p className="text-muted whitespace-pre-line">
               {product.description || "אין תיאור למוצר זה."}
@@ -110,7 +113,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
               productId={product.id}
               maxQuantity={publicMaxSelectableQuantity(product.stockQuantity)}
             />
-            <p className="sr-only">{formatIls(product.priceAmount)}</p>
           </div>
         </div>
       </div>

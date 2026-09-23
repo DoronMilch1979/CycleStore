@@ -5,7 +5,9 @@ import { unstable_cache } from "next/cache";
 import { STORE_NAME } from "@/config/site";
 import { STORE_CONTACT_DEFAULTS, STORE_HERO_ALT, STORE_STORY } from "@/config/store-content";
 import { getDb } from "@/db";
-import { categories } from "@/db/schema/catalog";
+import { listCategoriesInDisplayOrder } from "@/domain/catalog/category-service";
+import { buildHeroSlides, parseHeroDisplayMode, type HeroDisplayMode } from "@/domain/content/hero-slides";
+import { listHomepageImages } from "@/domain/content/store-images";
 import {
   banners,
   brandingSettings,
@@ -31,10 +33,19 @@ export type PublicCategory = {
   parentId: string | null;
 };
 
+export type PublicHeroImage = {
+  url: string;
+  alt: string;
+  isPrimary: boolean;
+  sortOrder: number;
+};
+
 export type PublicHomepage = {
   storyText: string;
   heroUrl: string | null;
   heroAlt: string;
+  heroDisplay: HeroDisplayMode;
+  heroImages: PublicHeroImage[];
   storeName: string;
   logoUrl: string | null;
   logoAlt: string;
@@ -44,6 +55,8 @@ const fallbackHomepage: PublicHomepage = {
   storyText: STORE_STORY,
   heroUrl: null,
   heroAlt: STORE_HERO_ALT,
+  heroDisplay: "slideshow",
+  heroImages: [],
   storeName: STORE_NAME,
   logoUrl: null,
   logoAlt: STORE_NAME,
@@ -76,11 +89,32 @@ async function loadHomepage(): Promise<PublicHomepage> {
       .select({
         storyText: homepageContent.storyText,
         heroAlt: homepageContent.heroAlt,
+        heroDisplay: homepageContent.heroDisplay,
         heroUrl: media.url,
       })
       .from(homepageContent)
       .leftJoin(media, eq(homepageContent.heroMediaId, media.id))
       .limit(1);
+
+    const storedImages = await listHomepageImages(db);
+    const heroImages =
+      storedImages.length > 0
+        ? storedImages.map((image) => ({
+            url: image.url,
+            alt: image.altText || home?.heroAlt || STORE_HERO_ALT,
+            isPrimary: image.isPrimary,
+            sortOrder: image.sortOrder,
+          }))
+        : home?.heroUrl
+          ? [
+              {
+                url: home.heroUrl,
+                alt: home.heroAlt || STORE_HERO_ALT,
+                isPrimary: true,
+                sortOrder: 0,
+              },
+            ]
+          : [];
 
     const [branding] = await db
       .select({
@@ -92,10 +126,20 @@ async function loadHomepage(): Promise<PublicHomepage> {
       .leftJoin(media, eq(brandingSettings.logoMediaId, media.id))
       .limit(1);
 
+    const slides = buildHeroSlides(heroImages, null);
+    const primary = slides.find((slide) => slide.isPrimary) ?? slides[0];
+
     return {
       storyText: home?.storyText || fallbackHomepage.storyText,
-      heroUrl: home?.heroUrl ?? null,
+      heroUrl: primary?.url ?? home?.heroUrl ?? null,
       heroAlt: home?.heroAlt || fallbackHomepage.heroAlt,
+      heroDisplay: parseHeroDisplayMode(home?.heroDisplay),
+      heroImages: slides.map((slide) => ({
+        url: slide.url,
+        alt: slide.alt,
+        isPrimary: Boolean(slide.isPrimary),
+        sortOrder: slide.sortOrder ?? 0,
+      })),
       storeName: branding?.storeName || STORE_NAME,
       logoUrl: branding?.logoUrl ?? null,
       logoAlt: branding?.logoAlt || STORE_NAME,
@@ -104,18 +148,15 @@ async function loadHomepage(): Promise<PublicHomepage> {
 }
 
 async function loadCategories(): Promise<PublicCategory[]> {
-  return withDatabaseFallback([], async () =>
-    getDb()
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        parentId: categories.parentId,
-      })
-      .from(categories)
-      .where(eq(categories.isActive, true))
-      .orderBy(asc(categories.sortOrder), asc(categories.name)),
-  );
+  return withDatabaseFallback([], async () => {
+    const rows = await listCategoriesInDisplayOrder(getDb(), true);
+    return rows.map((category) => ({
+      id: category.id,
+      name: category.name,
+      slug: category.slug,
+      parentId: category.parentId,
+    }));
+  });
 }
 
 async function loadContactFields(): Promise<PublicContactField[]> {

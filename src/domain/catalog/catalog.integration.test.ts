@@ -4,8 +4,10 @@ import { productImages } from "@/db/schema/catalog";
 import {
   createCategory,
   deleteCategory,
+  listCategoriesInDisplayOrder,
   listDescendantIds,
   moveCategory,
+  moveCategoryOrder,
 } from "@/domain/catalog/category-service";
 import {
   attachProductImage,
@@ -13,6 +15,7 @@ import {
   deleteProductImage,
   moveProductImage,
   setProductPrimaryImage,
+  updateProduct,
 } from "@/domain/catalog/product-service";
 import { setStockQuantity } from "@/domain/inventory/stock-service";
 import {
@@ -77,7 +80,7 @@ describe("catalog and inventory persistence", () => {
     await createProduct(db, {
       name: "מוצר משויך",
       description: "תיאור",
-      price: "10.00",
+      price: "10",
       isActive: true,
       categoryIds: [occupied.id],
       stockQuantity: 1,
@@ -108,16 +111,28 @@ describe("catalog and inventory persistence", () => {
       }),
     ).rejects.toBeInstanceOf(AppError);
 
+    await expect(
+      createProduct(db, {
+        name: "קסדה",
+        description: "תיאור",
+        price: "199.90",
+        isActive: true,
+        categoryIds: [category.id],
+        stockQuantity: 2,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_PRICE" });
+
     const product = await createProduct(db, {
       name: "קסדה",
       description: "תיאור",
-      price: "199.90",
+      price: "199",
       isActive: true,
       categoryIds: [category.id],
       stockQuantity: 2,
     });
 
-    expect(product.priceAmount).toBe("199.90");
+    expect(product.priceAmount).toBe("199.00");
+    expect(product.discountPriceAmount).toBeNull();
     expect(product.stockQuantity).toBe(2);
 
     await expect(
@@ -141,7 +156,7 @@ describe("catalog and inventory persistence", () => {
       version: 1,
       items: [{ productId: product.id, quantity: 2 }],
     });
-    expect(validCart.subtotal).toBe("399.80");
+    expect(validCart.subtotal).toBe("398.00");
     expect(validCart.lines[0]?.issue).toBeNull();
   });
 
@@ -154,7 +169,7 @@ describe("catalog and inventory persistence", () => {
     const product = await createProduct(db, {
       name: "אופני הרים",
       description: "תיאור",
-      price: "100.00",
+      price: "100",
       isActive: true,
       categoryIds: [category.id],
       stockQuantity: 20,
@@ -185,7 +200,7 @@ describe("catalog and inventory persistence", () => {
     const product = await createProduct(db, {
       name: "שם המוצר",
       description: "תיאור",
-      price: "100.00",
+      price: "100",
       isActive: true,
       categoryIds: [child.id],
       stockQuantity: 1,
@@ -213,7 +228,7 @@ describe("catalog and inventory persistence", () => {
     const product = await createProduct(db, {
       name: "קסדה",
       description: "תיאור",
-      price: "100.00",
+      price: "100",
       isActive: true,
       categoryIds: [category.id],
       stockQuantity: 1,
@@ -270,5 +285,105 @@ describe("catalog and inventory persistence", () => {
     const afterDelete = await ordered();
     expect(afterDelete.map((row) => row.id)).toEqual([first.image!.id, third.image!.id]);
     expect(afterDelete[0]?.isPrimary).toBe(true);
+  });
+
+  it("orders categories independently inside each parent", async () => {
+    const test = await createTestDatabase();
+    close = test.close;
+    const { db } = test;
+
+    const bikes = await createCategory(db, { name: "אופניים" });
+    const gear = await createCategory(db, { name: "ציוד" });
+    const mountain = await createCategory(db, { name: "אופני הרים", parentId: bikes.id });
+    const electric = await createCategory(db, { name: "אופניים חשמליים", parentId: bikes.id });
+    const helmets = await createCategory(db, { name: "קסדות", parentId: gear.id });
+    const gloves = await createCategory(db, { name: "כפפות", parentId: gear.id });
+
+    await moveCategoryOrder(db, electric.id, "up");
+    await moveCategoryOrder(db, gear.id, "up");
+
+    const ordered = await listCategoriesInDisplayOrder(db);
+    const names = (parentId: string | null) =>
+      ordered.filter((category) => category.parentId === parentId).map((category) => category.name);
+
+    expect(names(null)).toEqual(["ציוד", "אופניים"]);
+    expect(names(bikes.id)).toEqual(["אופניים חשמליים", "אופני הרים"]);
+    expect(names(gear.id)).toEqual(["קסדות", "כפפות"]);
+    expect(mountain.id).toBeTruthy();
+    expect(helmets.id).toBeTruthy();
+    expect(gloves.id).toBeTruthy();
+  });
+
+  it("prices cart lines with the current discount and falls back when it is removed", async () => {
+    const test = await createTestDatabase();
+    close = test.close;
+    const { db } = test;
+
+    const category = await createCategory(db, { name: "אופני הרים" });
+    const discounted = await createProduct(db, {
+      name: "אופני הרים",
+      description: "תיאור",
+      price: "300",
+      discountPrice: "250",
+      isActive: true,
+      categoryIds: [category.id],
+      stockQuantity: 5,
+    });
+    const regular = await createProduct(db, {
+      name: "קסדה",
+      description: "תיאור",
+      price: "100",
+      isActive: true,
+      categoryIds: [category.id],
+      stockQuantity: 5,
+    });
+
+    await expect(
+      updateProduct(db, discounted.id, {
+        name: discounted.name,
+        description: discounted.description,
+        price: "300",
+        discountPrice: "300",
+        isActive: true,
+        categoryIds: [category.id],
+        stockQuantity: 5,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_DISCOUNT" });
+
+    const cart = await validateCartAgainstCatalog(db, {
+      version: 1,
+      items: [
+        { productId: discounted.id, quantity: 2 },
+        { productId: regular.id, quantity: 1 },
+      ],
+    });
+    const discountedLine = cart.lines.find((line) => line.productId === discounted.id);
+    expect(discountedLine?.unitPrice).toBe("250.00");
+    expect(discountedLine?.lineTotal).toBe("500.00");
+    expect(discountedLine?.discountPrice).toBe("250.00");
+    expect(cart.subtotal).toBe("600.00");
+
+    await updateProduct(db, discounted.id, {
+      name: discounted.name,
+      description: discounted.description,
+      price: "300",
+      discountPrice: "0",
+      isActive: true,
+      categoryIds: [category.id],
+      stockQuantity: 5,
+    });
+
+    const refreshed = await validateCartAgainstCatalog(db, {
+      version: 1,
+      items: [
+        { productId: discounted.id, quantity: 2 },
+        { productId: regular.id, quantity: 1 },
+      ],
+    });
+    const refreshedLine = refreshed.lines.find((line) => line.productId === discounted.id);
+    expect(refreshedLine?.discountPrice).toBeNull();
+    expect(refreshedLine?.unitPrice).toBe("300.00");
+    expect(refreshedLine?.lineTotal).toBe("600.00");
+    expect(refreshed.subtotal).toBe("700.00");
   });
 });

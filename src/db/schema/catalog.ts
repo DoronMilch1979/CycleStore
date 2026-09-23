@@ -71,6 +71,7 @@ export const products = pgTable(
     description: text("description").notNull().default(""),
     sku: text("sku"),
     priceAmount: numeric("price_amount", { precision: 12, scale: 2 }).notNull(),
+    discountPriceAmount: numeric("discount_price_amount", { precision: 12, scale: 2 }),
     currency: text("currency").notNull().default("ILS"),
     stockQuantity: integer("stock_quantity").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
@@ -87,6 +88,10 @@ export const products = pgTable(
     index("products_active_idx").on(table.isActive),
     index("products_name_idx").on(table.name),
     check("products_price_nonnegative", sql`${table.priceAmount} >= 0`),
+    check(
+      "products_discount_nonnegative",
+      sql`${table.discountPriceAmount} is null or ${table.discountPriceAmount} >= 0`,
+    ),
     check("products_stock_nonnegative", sql`${table.stockQuantity} >= 0`),
     check("products_currency_ils", sql`${table.currency} = 'ILS'`),
   ],

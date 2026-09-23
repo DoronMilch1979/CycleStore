@@ -1,7 +1,8 @@
-import Image from "next/image";
 import { PLACEHOLDER_HERO_SRC, STORE_NAME } from "@/config/site";
+import { HeroSlideshow } from "@/components/storefront/hero-slideshow";
 import { ProductCardGrid, toProductCardData } from "@/components/storefront/product-card";
 import { StorefrontShell } from "@/components/storefront/storefront-shell";
+import { buildHeroSlides, slidesForHeroDisplay } from "@/domain/content/hero-slides";
 import { jsonLdScript, storeOrganizationJsonLd } from "@/lib/json-ld";
 import {
   getCachedBanners,
@@ -35,6 +36,7 @@ export default async function HomePage() {
           name: products.name,
           slug: products.slug,
           priceAmount: products.priceAmount,
+          discountPriceAmount: products.discountPriceAmount,
           stockQuantity: products.stockQuantity,
           imageUrl: media.url,
           imageAlt: media.altText,
@@ -80,16 +82,15 @@ export default async function HomePage() {
         )}
       </section>
       <section className="relative">
-        <div className="relative h-[min(48vh,22rem)] w-full bg-surface-muted sm:h-[min(70vh,36rem)]">
-          <Image
-            src={homepage.heroUrl ?? PLACEHOLDER_HERO_SRC}
-            alt={homepage.heroAlt || STORE_NAME}
-            fill
-            priority
-            className="object-cover"
-            sizes="100vw"
-          />
-        </div>
+        <HeroSlideshow
+          slides={slidesForHeroDisplay(
+            buildHeroSlides(homepage.heroImages, {
+              url: PLACEHOLDER_HERO_SRC,
+              alt: homepage.heroAlt || STORE_NAME,
+            }),
+            homepage.heroDisplay,
+          )}
+        />
       </section>
       <section className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] py-8 sm:py-12">
         <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">{homepage.storeName}</h1>

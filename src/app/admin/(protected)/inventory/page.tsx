@@ -24,6 +24,7 @@ export default async function InventoryPage({
       name: products.name,
       sku: products.sku,
       priceAmount: products.priceAmount,
+      discountPriceAmount: products.discountPriceAmount,
       stockQuantity: products.stockQuantity,
       isActive: products.isActive,
       categoryName: sql<string>`string_agg(${categories.name}, ', ')`,
@@ -37,6 +38,7 @@ export default async function InventoryPage({
       products.name,
       products.sku,
       products.priceAmount,
+      products.discountPriceAmount,
       products.stockQuantity,
       products.isActive,
     );

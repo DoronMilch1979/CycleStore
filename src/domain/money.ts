@@ -33,14 +33,17 @@ export function moneyToDb(value: Money): string {
   return value.toFixed(2);
 }
 
-export function formatIls(value: string | number | Decimal): string {
+export function formatShekelAmount(value: string | number | Decimal): string {
   const amount = value instanceof Decimal ? value : parseMoney(value);
+  const wholeShekels = amount.toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
   return new Intl.NumberFormat("he-IL", {
-    style: "currency",
-    currency: "ILS",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount.toNumber());
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(wholeShekels.toNumber());
+}
+
+export function formatIls(value: string | number | Decimal): string {
+  return `${formatShekelAmount(value)}\u00a0₪`;
 }
 
 export function lineTotal(unitPrice: Money, quantity: number): Money {

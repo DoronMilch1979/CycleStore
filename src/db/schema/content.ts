@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -19,11 +20,37 @@ export const homepageContent = pgTable(
     storyText: text("story_text").notNull().default(""),
     heroMediaId: uuid("hero_media_id").references(() => media.id, { onDelete: "set null" }),
     heroAlt: text("hero_alt").notNull().default(""),
+    heroDisplay: text("hero_display").notNull().default("slideshow"),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
   },
-  (table) => [check("homepage_content_singleton", sql`${table.id} = 1`)],
+  (table) => [
+    check("homepage_content_singleton", sql`${table.id} = 1`),
+    check(
+      "homepage_content_hero_display",
+      sql`${table.heroDisplay} in ('slideshow', 'primary')`,
+    ),
+  ],
+);
+
+export const homepageImages = pgTable(
+  "homepage_images",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    mediaId: uuid("media_id")
+      .notNull()
+      .references(() => media.id, { onDelete: "restrict" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isPrimary: boolean("is_primary").notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex("homepage_images_media_idx").on(table.mediaId),
+    uniqueIndex("homepage_images_one_primary_idx")
+      .on(table.isPrimary)
+      .where(sql`${table.isPrimary} = true`),
+    index("homepage_images_sort_idx").on(table.sortOrder),
+  ],
 );
 
 export const brandingSettings = pgTable(

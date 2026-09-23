@@ -1,0 +1,2 @@
+ALTER TABLE "homepage_content" ADD COLUMN "hero_display" text DEFAULT 'slideshow' NOT NULL;--> statement-breakpoint
+ALTER TABLE "homepage_content" ADD CONSTRAINT "homepage_content_hero_display" CHECK ("homepage_content"."hero_display" in ('slideshow', 'primary'));

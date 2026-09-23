@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, or, sql, type AnyColumn } from "drizzle-orm";
 import {
   categories,
   categoryClosure,
@@ -9,6 +9,7 @@ import {
 import { media } from "@/db/schema/media";
 import type { AppDatabase } from "@/db/types";
 import { lineTotal, parseMoney } from "@/domain/money";
+import { resolveProductPricing } from "@/domain/pricing";
 import { publicMaxSelectableQuantity } from "@/domain/cart/limits";
 import type { GuestCart, ValidatedCart, ValidatedCartLine } from "@/domain/cart/types";
 import { AppError } from "@/lib/errors";
@@ -28,6 +29,7 @@ export async function validateCartAgainstCatalog(
       slug: products.slug,
       name: products.name,
       priceAmount: products.priceAmount,
+      discountPriceAmount: products.discountPriceAmount,
       stockQuantity: products.stockQuantity,
       isActive: products.isActive,
       imageUrl: media.url,
@@ -51,6 +53,8 @@ export async function validateCartAgainstCatalog(
         name: "מוצר שאינו זמין",
         quantity: item.quantity,
         maxQuantity: 0,
+        regularPrice: "0.00",
+        discountPrice: null,
         unitPrice: "0.00",
         lineTotal: "0.00",
         currency: "ILS",
@@ -61,7 +65,8 @@ export async function validateCartAgainstCatalog(
       };
     }
 
-    const unitPrice = parseMoney(product.priceAmount);
+    const pricing = resolveProductPricing(product);
+    const unitPrice = pricing.effective;
     const maxQuantity = publicMaxSelectableQuantity(product.stockQuantity);
     let issue: ValidatedCartLine["issue"] = null;
     if (!product.isActive) issue = "inactive";
@@ -76,6 +81,8 @@ export async function validateCartAgainstCatalog(
       name: product.name,
       quantity: item.quantity,
       maxQuantity,
+      regularPrice: pricing.regular.toFixed(2),
+      discountPrice: pricing.discount ? pricing.discount.toFixed(2) : null,
       unitPrice: unitPrice.toFixed(2),
       lineTotal: lineTotal(unitPrice, Math.max(safeQuantity, 0)).toFixed(2),
       currency: "ILS",
@@ -106,6 +113,7 @@ export async function listProductsInCategoryTree(db: AppDatabase, categoryId: st
       name: products.name,
       slug: products.slug,
       priceAmount: products.priceAmount,
+      discountPriceAmount: products.discountPriceAmount,
       stockQuantity: products.stockQuantity,
       isActive: products.isActive,
       imageUrl: media.url,
@@ -125,6 +133,7 @@ export async function listProductsInCategoryTree(db: AppDatabase, categoryId: st
       products.name,
       products.slug,
       products.priceAmount,
+      products.discountPriceAmount,
       products.stockQuantity,
       products.isActive,
       media.url,
@@ -208,6 +217,67 @@ export async function getProductCategoryPath(
   }
 
   return best;
+}
+
+const MAX_SEARCH_LENGTH = 200;
+
+function searchPattern(rawQuery: string) {
+  const trimmed = rawQuery.trim().slice(0, MAX_SEARCH_LENGTH);
+  const escaped = trimmed.replace(/[\\%_]/g, (char) => `\\${char}`);
+  return { trimmed, pattern: `%${escaped}%` };
+}
+
+function ilikeContains(column: AnyColumn, pattern: string) {
+  return sql`${column} ILIKE ${pattern} ESCAPE '\\'`;
+}
+
+export async function searchPublicProducts(db: AppDatabase, rawQuery: string) {
+  const { trimmed, pattern } = searchPattern(rawQuery);
+  if (!trimmed) return [];
+
+  const categoryMatch = db
+    .select({ id: productCategories.productId })
+    .from(productCategories)
+    .innerJoin(categoryClosure, eq(categoryClosure.descendantId, productCategories.categoryId))
+    .innerJoin(categories, eq(categories.id, categoryClosure.ancestorId))
+    .where(
+      and(
+        eq(productCategories.productId, products.id),
+        eq(categories.isActive, true),
+        ilikeContains(categories.name, pattern),
+      ),
+    );
+
+  return db
+    .select({
+      id: products.id,
+      name: products.name,
+      slug: products.slug,
+      priceAmount: products.priceAmount,
+      discountPriceAmount: products.discountPriceAmount,
+      stockQuantity: products.stockQuantity,
+      isActive: products.isActive,
+      imageUrl: media.url,
+      imageAlt: media.altText,
+    })
+    .from(products)
+    .leftJoin(
+      productImages,
+      and(eq(productImages.productId, products.id), eq(productImages.isPrimary, true)),
+    )
+    .leftJoin(media, eq(media.id, productImages.mediaId))
+    .where(
+      and(
+        eq(products.isActive, true),
+        or(
+          ilikeContains(products.name, pattern),
+          ilikeContains(products.description, pattern),
+          ilikeContains(products.sku, pattern),
+          exists(categoryMatch),
+        ),
+      ),
+    )
+    .orderBy(asc(products.name), asc(products.id));
 }
 
 export { sql };

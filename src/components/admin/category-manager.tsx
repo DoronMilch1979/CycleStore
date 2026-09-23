@@ -8,6 +8,7 @@ import {
   createCategoryAction,
   deleteCategoryAction,
   moveCategoryAction,
+  reorderCategoryAction,
 } from "@/server/actions/catalog";
 import { formAction } from "@/lib/form-action";
 
@@ -42,10 +43,48 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
   const renderTree = (parentId: string | null, depth = 0) =>
     categories
       .filter((category) => category.parentId === parentId)
-      .map((category) => (
+      .map((category, index, siblings) => (
         <li key={category.id} style={{ marginInlineStart: depth * 16 }} className="space-y-2 py-2">
           <div className="flex flex-wrap items-center gap-3">
             <span className="font-medium">{category.name}</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              type="button"
+              disabled={pendingId === category.id || index === 0}
+              onClick={async () => {
+                setPendingId(category.id);
+                setError(null);
+                const result = await reorderCategoryAction(category.id, "up");
+                setPendingId(null);
+                if (!result.ok) {
+                  setError({ categoryId: category.id, message: result.error });
+                  return;
+                }
+                router.refresh();
+              }}
+            >
+              למעלה
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              type="button"
+              disabled={pendingId === category.id || index === siblings.length - 1}
+              onClick={async () => {
+                setPendingId(category.id);
+                setError(null);
+                const result = await reorderCategoryAction(category.id, "down");
+                setPendingId(null);
+                if (!result.ok) {
+                  setError({ categoryId: category.id, message: result.error });
+                  return;
+                }
+                router.refresh();
+              }}
+            >
+              למטה
+            </Button>
             <form action={formAction(moveCategoryAction)} className="flex items-center gap-2">
               <input type="hidden" name="categoryId" value={category.id} />
               <select

@@ -4,6 +4,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { products } from "@/db/schema/catalog";
+import { CONTACT_FIELD_TYPES } from "@/config/store-content";
 import { banners, brandingSettings, contactFields, siteSettings } from "@/db/schema/content";
 import { ACCESSIBILITY_SETTINGS_KEY } from "@/domain/content/accessibility-statement";
 import {
@@ -33,6 +34,23 @@ import { assertSafeImageUpload, getMediaStorage } from "@/domain/media/storage";
 import { cacheTags } from "@/lib/cache-tags";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { requireAdminSession } from "@/server/authz";
+
+const CONTACT_FIELD_TYPE_VALUES = new Set<string>(
+  CONTACT_FIELD_TYPES.map((type) => type.value),
+);
+
+function readContactFieldType(value: FormDataEntryValue | null) {
+  const type = String(value ?? "").trim();
+  if (CONTACT_FIELD_TYPE_VALUES.has(type)) return type;
+  if (/^[a-z][a-z0-9-]{0,31}$/.test(type)) return type;
+  return "text";
+}
+
+function revalidateContact() {
+  updateTag(cacheTags.contact);
+  revalidatePath("/");
+  revalidatePath("/accessibility");
+}
 
 function revalidateCatalog() {
   updateTag(cacheTags.catalog);
@@ -287,12 +305,11 @@ export async function saveContactFieldAction(formData: FormData) {
         label: String(formData.get("label") ?? ""),
         value: String(formData.get("value") ?? ""),
         isActive: formData.get("isActive") === "on",
-        fieldType: String(formData.get("fieldType") ?? "text"),
+        fieldType: readContactFieldType(formData.get("fieldType")),
         updatedAt: new Date(),
       })
       .where(eq(contactFields.id, id));
-    updateTag(cacheTags.contact);
-    revalidatePath("/");
+    revalidateContact();
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };
@@ -334,15 +351,34 @@ export async function saveAccessibilitySettingsAction(formData: FormData) {
 export async function addContactFieldAction(formData: FormData) {
   try {
     await requireAdminSession();
+    const fieldKey = String(formData.get("fieldKey") ?? "").trim();
+    if (!fieldKey) {
+      return { ok: false as const, error: "יש להזין מפתח באנגלית." };
+    }
     await getDb().insert(contactFields).values({
-      fieldKey: String(formData.get("fieldKey") ?? "").trim(),
-      fieldType: String(formData.get("fieldType") ?? "text"),
+      fieldKey,
+      fieldType: readContactFieldType(formData.get("fieldType")),
       label: String(formData.get("label") ?? ""),
       value: String(formData.get("value") ?? ""),
       isActive: formData.get("isActive") === "on",
       sortOrder: Number(formData.get("sortOrder") ?? 100),
     });
-    updateTag(cacheTags.contact);
+    revalidateContact();
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function deleteContactFieldAction(id: string) {
+  try {
+    await requireAdminSession();
+    const fieldId = id.trim();
+    if (!fieldId) {
+      return { ok: false as const, error: "חסר מזהה שדה." };
+    }
+    await getDb().delete(contactFields).where(eq(contactFields.id, fieldId));
+    revalidateContact();
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };

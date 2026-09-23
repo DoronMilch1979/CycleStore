@@ -8,6 +8,17 @@ export const STORE_HERO_ALT = "מרכז האופניים רמת ישי — או�
 
 export const STORE_FACEBOOK_URL = "https://www.facebook.com/profile.php?id=100054554553973";
 
+export const CONTACT_FIELD_TYPES = [
+  { value: "text", label: "טקסט" },
+  { value: "address", label: "כתובת" },
+  { value: "phone", label: "טלפון" },
+  { value: "email", label: "דוא״ל" },
+  { value: "whatsapp", label: "וואטסאפ" },
+  { value: "url", label: "קישור" },
+  { value: "facebook", label: "פייסבוק" },
+  { value: "hours", label: "שעות פתיחה" },
+] as const;
+
 export const STORE_CONTACT_DEFAULTS = [
   {
     fieldKey: "address",

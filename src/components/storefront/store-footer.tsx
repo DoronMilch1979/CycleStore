@@ -32,9 +32,13 @@ export function StoreFooter({ fields }: { fields: PublicContactField[] }) {
                   >
                     {field.value}
                   </a>
-                ) : field.fieldType === "url" || field.fieldType === "facebook" ? (
+                ) : field.fieldType === "facebook" ? (
                   <a className="text-link" href={field.value} rel="noreferrer" target="_blank">
                     עמוד הפייסבוק
+                  </a>
+                ) : field.fieldType === "url" ? (
+                  <a className="text-link" href={field.value} rel="noreferrer" target="_blank">
+                    {field.value}
                   </a>
                 ) : field.fieldType === "hours" ? (
                   <span className="whitespace-pre-line">{field.value}</span>

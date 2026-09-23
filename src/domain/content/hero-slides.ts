@@ -27,6 +27,14 @@ export function shouldAnimateHero(slideCount: number, prefersReducedMotion: bool
   return slideCount > 1 && !prefersReducedMotion;
 }
 
+export function shouldAutoplayHero(
+  slideCount: number,
+  prefersReducedMotion: boolean,
+  paused: boolean,
+): boolean {
+  return shouldAnimateHero(slideCount, prefersReducedMotion) && !paused;
+}
+
 export type HeroDisplayMode = "slideshow" | "primary";
 
 export function parseHeroDisplayMode(value: string | null | undefined): HeroDisplayMode {

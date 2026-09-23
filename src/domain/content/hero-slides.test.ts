@@ -4,6 +4,7 @@ import {
   buildHeroSlides,
   initialHeroSlideIndex,
   shouldAnimateHero,
+  shouldAutoplayHero,
   slidesForHeroDisplay,
 } from "@/domain/content/hero-slides";
 
@@ -27,6 +28,13 @@ describe("homepage hero slides", () => {
     expect(shouldAnimateHero(0, false)).toBe(false);
     expect(shouldAnimateHero(3, true)).toBe(false);
     expect(shouldAnimateHero(3, false)).toBe(true);
+  });
+
+  it("autoplays only while several slides are allowed to move and the visitor has not paused", () => {
+    expect(shouldAutoplayHero(3, false, false)).toBe(true);
+    expect(shouldAutoplayHero(3, true, false)).toBe(false);
+    expect(shouldAutoplayHero(3, false, true)).toBe(false);
+    expect(shouldAutoplayHero(1, false, false)).toBe(false);
   });
 
   it("shows every image in a slideshow and only the primary image when requested", () => {

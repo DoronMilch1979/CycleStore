@@ -74,11 +74,13 @@ export default async function HomePage() {
           }),
         )}
       />
-      <section className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] py-8 sm:py-12">
+      <section className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] pt-6 pb-8 sm:pt-8 sm:pb-12">
+        <h1 className="sr-only">{homepage.storeName}</h1>
+        <h2 className="sr-only">מוצרים בחנות</h2>
         {featured.length === 0 ? (
           <p className="text-center text-muted">אין מוצרים להצגה כרגע.</p>
         ) : (
-          <ProductCardGrid products={featured} />
+          <ProductCardGrid products={featured} headingLevel="h3" />
         )}
       </section>
       <section className="relative">
@@ -93,7 +95,7 @@ export default async function HomePage() {
         />
       </section>
       <section className="mx-auto w-full max-w-[var(--width-content)] px-[var(--space-page)] py-8 sm:py-12">
-        <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">{homepage.storeName}</h1>
+        <h2 className="mb-4 text-2xl font-semibold">על החנות</h2>
         <p className="max-w-3xl whitespace-pre-line text-base leading-7 text-muted sm:text-lg sm:leading-8">
           {homepage.storyText}
         </p>

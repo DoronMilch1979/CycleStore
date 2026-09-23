@@ -30,7 +30,7 @@ export function ProductCardAction({
       <div className={ACTION_SLOT} onClick={stopCardNavigation} onPointerDown={stopCardNavigation}>
         <a
           href="/#contact"
-          className="max-w-[5.5rem] text-end text-[0.65rem] font-medium leading-tight text-muted underline-offset-2 hover:text-primary hover:underline sm:max-w-[6.75rem] sm:text-xs"
+          className="text-link max-w-[5.5rem] text-end text-[0.65rem] font-medium leading-tight sm:max-w-[6.75rem] sm:text-xs"
           onClick={(event) => event.stopPropagation()}
         >
           צור קשר לפרטים נוספים

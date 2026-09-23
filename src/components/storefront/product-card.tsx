@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PLACEHOLDER_PRODUCT_SRC } from "@/config/site";
 import { ProductPrice } from "@/components/ui/price";
 import { ProductCardAction } from "@/components/storefront/product-card-action";
+import { productCardImageAlt } from "@/domain/catalog/product-card-alt";
 import { publicMaxSelectableQuantity } from "@/domain/cart/limits";
 import { cn } from "@/lib/cn";
 
@@ -18,7 +19,14 @@ export type ProductCardData = {
   imageAlt: string | null;
 };
 
-export function ProductCard({ product }: { product: ProductCardData }) {
+export function ProductCard({
+  product,
+  headingLevel = "h2",
+}: {
+  product: ProductCardData;
+  headingLevel?: "h2" | "h3";
+}) {
+  const Heading = headingLevel;
   return (
     <article className="relative flex h-full flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border bg-surface shadow-[var(--shadow-sm)]">
       <Link
@@ -30,16 +38,16 @@ export function ProductCard({ product }: { product: ProductCardData }) {
         <div className="relative aspect-[4/3] bg-surface-muted">
           <Image
             src={product.imageUrl ?? PLACEHOLDER_PRODUCT_SRC}
-            alt=""
+            alt={productCardImageAlt(product.name, product.imageAlt)}
             fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
             className="object-cover"
           />
         </div>
         <div className="flex flex-1 flex-col px-3 pt-3 sm:px-4 sm:pt-4">
-          <h2 className="line-clamp-2 min-h-[2.6em] text-sm font-semibold leading-snug sm:text-base">
+          <Heading className="line-clamp-2 min-h-[2.6em] text-sm font-semibold leading-snug sm:text-base">
             {product.name}
-          </h2>
+          </Heading>
           <p
             className={cn(
               "mt-2 text-xs sm:text-sm",
@@ -71,13 +79,15 @@ export function ProductCard({ product }: { product: ProductCardData }) {
 
 export function ProductCardGrid({
   products,
+  headingLevel = "h2",
 }: {
   products: ProductCardData[];
+  headingLevel?: "h2" | "h3";
 }) {
   return (
     <div className="grid grid-cols-2 items-stretch gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
+        <ProductCard key={product.id} product={product} headingLevel={headingLevel} />
       ))}
     </div>
   );

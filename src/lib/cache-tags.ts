@@ -1,6 +1,7 @@
 export const cacheTags = {
   homepage: "homepage",
   contact: "contact",
+  accessibility: "accessibility",
   branding: "branding",
   banners: "banners",
   catalog: "catalog",

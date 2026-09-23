@@ -33,10 +33,12 @@ export function ProductPrice({
 
   return (
     <span className={cn("inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5", className)}>
+      <span className="sr-only">מחיר לפני הנחה</span>
       <Price
         amount={pricing.regular.toFixed(2)}
         className="text-[0.85em] font-normal text-danger line-through decoration-danger"
       />
+      <span className="sr-only">מחיר אחרי הנחה</span>
       <Price amount={pricing.effective.toFixed(2)} />
     </span>
   );

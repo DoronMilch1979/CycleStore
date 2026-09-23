@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { PublicContactField } from "@/server/queries/public";
 
 export function StoreFooter({ fields }: { fields: PublicContactField[] }) {
@@ -15,11 +16,16 @@ export function StoreFooter({ fields }: { fields: PublicContactField[] }) {
               <li key={field.fieldKey}>
                 <span className="font-medium">{field.label}: </span>
                 {field.fieldType === "email" ? (
-                  <a href={`mailto:${field.value}`}>{field.value}</a>
+                  <a className="text-link" href={`mailto:${field.value}`}>
+                    {field.value}
+                  </a>
                 ) : field.fieldType === "phone" ? (
-                  <a href={`tel:${field.value}`}>{field.value}</a>
+                  <a className="text-link" href={`tel:${field.value}`}>
+                    {field.value}
+                  </a>
                 ) : field.fieldType === "whatsapp" ? (
                   <a
+                    className="text-link"
                     href={`https://wa.me/${field.value.replace(/\D/g, "")}`}
                     rel="noreferrer"
                     target="_blank"
@@ -27,7 +33,7 @@ export function StoreFooter({ fields }: { fields: PublicContactField[] }) {
                     {field.value}
                   </a>
                 ) : field.fieldType === "url" || field.fieldType === "facebook" ? (
-                  <a href={field.value} rel="noreferrer" target="_blank">
+                  <a className="text-link" href={field.value} rel="noreferrer" target="_blank">
                     עמוד הפייסבוק
                   </a>
                 ) : field.fieldType === "hours" ? (
@@ -39,6 +45,11 @@ export function StoreFooter({ fields }: { fields: PublicContactField[] }) {
             ))}
           </ul>
         )}
+        <nav aria-label="נגישות" className="mt-8 border-t border-border pt-6">
+          <Link href="/accessibility" className="text-link text-base font-semibold">
+            הצהרת נגישות
+          </Link>
+        </nav>
       </div>
     </footer>
   );

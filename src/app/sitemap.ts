@@ -9,6 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const site = getSiteUrl();
   const entries: MetadataRoute.Sitemap = [
     { url: site, lastModified: new Date(), changeFrequency: "weekly", priority: 1 },
+    { url: `${site}/accessibility`, changeFrequency: "yearly", priority: 0.3 },
   ];
 
   const categories = await getCachedCategories();

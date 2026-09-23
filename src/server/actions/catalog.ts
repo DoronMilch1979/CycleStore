@@ -4,7 +4,8 @@ import { revalidatePath, updateTag } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { products } from "@/db/schema/catalog";
-import { banners, brandingSettings, contactFields } from "@/db/schema/content";
+import { banners, brandingSettings, contactFields, siteSettings } from "@/db/schema/content";
+import { ACCESSIBILITY_SETTINGS_KEY } from "@/domain/content/accessibility-statement";
 import {
   createCategory,
   deleteCategory,
@@ -292,6 +293,38 @@ export async function saveContactFieldAction(formData: FormData) {
       .where(eq(contactFields.id, id));
     updateTag(cacheTags.contact);
     revalidatePath("/");
+    return { ok: true as const };
+  } catch (error) {
+    return { ok: false as const, error: toPublicErrorMessage(error) };
+  }
+}
+
+export async function saveAccessibilitySettingsAction(formData: FormData) {
+  try {
+    await requireAdminSession();
+    const value = {
+      contactName: String(formData.get("contactName") ?? "").trim().slice(0, 120),
+      premisesAccessibility: String(formData.get("premisesAccessibility") ?? "")
+        .trim()
+        .slice(0, 4000),
+      coordinatorAppointed: formData.get("coordinatorAppointed") === "on",
+    };
+    await getDb()
+      .insert(siteSettings)
+      .values({
+        key: ACCESSIBILITY_SETTINGS_KEY,
+        value,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: siteSettings.key,
+        set: {
+          value,
+          updatedAt: new Date(),
+        },
+      });
+    updateTag(cacheTags.accessibility);
+    revalidatePath("/accessibility");
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };

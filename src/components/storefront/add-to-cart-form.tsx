@@ -25,7 +25,7 @@ export function AddToCartForm({
     return (
       <div className="space-y-3">
         <p className="text-danger">אזל מהמלאי</p>
-        <a href="/#contact" className="inline-block text-sm font-medium text-primary underline-offset-2 hover:underline">
+        <a href="/#contact" className="text-link inline-block text-sm font-medium">
           צור קשר לפרטים נוספים
         </a>
       </div>

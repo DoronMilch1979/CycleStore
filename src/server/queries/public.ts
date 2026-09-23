@@ -4,6 +4,14 @@ import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { STORE_NAME } from "@/config/site";
 import { STORE_CONTACT_DEFAULTS, STORE_HERO_ALT, STORE_STORY } from "@/config/store-content";
+import {
+  ACCESSIBILITY_SETTINGS_KEY,
+  ACCESSIBILITY_STATEMENT_PUBLISHED_LABEL,
+  emptyAccessibilitySettings,
+  formatAccessibilityUpdatedLabel,
+  parseAccessibilitySettings,
+  type AccessibilitySettings,
+} from "@/domain/content/accessibility-statement";
 import { getDb } from "@/db";
 import { listCategoriesInDisplayOrder } from "@/domain/catalog/category-service";
 import { buildHeroSlides, parseHeroDisplayMode, type HeroDisplayMode } from "@/domain/content/hero-slides";
@@ -13,11 +21,16 @@ import {
   brandingSettings,
   contactFields,
   homepageContent,
+  siteSettings,
 } from "@/db/schema/content";
 import { media } from "@/db/schema/media";
 import { cacheTags } from "@/lib/cache-tags";
 import { env, isDatabaseConfigured } from "@/lib/env";
 import { PUBLIC_CACHE_SECONDS } from "@/config/site";
+
+export type PublicAccessibility = AccessibilitySettings & {
+  updatedLabel: string;
+};
 
 export type PublicContactField = {
   fieldKey: string;
@@ -60,6 +73,11 @@ const fallbackHomepage: PublicHomepage = {
   storeName: STORE_NAME,
   logoUrl: null,
   logoAlt: STORE_NAME,
+};
+
+const fallbackAccessibility: PublicAccessibility = {
+  ...emptyAccessibilitySettings,
+  updatedLabel: ACCESSIBILITY_STATEMENT_PUBLISHED_LABEL,
 };
 
 const fallbackContactFields: PublicContactField[] = STORE_CONTACT_DEFAULTS.filter(
@@ -159,6 +177,24 @@ async function loadCategories(): Promise<PublicCategory[]> {
   });
 }
 
+async function loadAccessibility(): Promise<PublicAccessibility> {
+  return withDatabaseFallback(fallbackAccessibility, async () => {
+    const [row] = await getDb()
+      .select({
+        value: siteSettings.value,
+        updatedAt: siteSettings.updatedAt,
+      })
+      .from(siteSettings)
+      .where(eq(siteSettings.key, ACCESSIBILITY_SETTINGS_KEY))
+      .limit(1);
+    if (!row) return fallbackAccessibility;
+    return {
+      ...parseAccessibilitySettings(row.value),
+      updatedLabel: formatAccessibilityUpdatedLabel(row.updatedAt),
+    };
+  });
+}
+
 async function loadContactFields(): Promise<PublicContactField[]> {
   return withDatabaseFallback(fallbackContactFields, async () =>
     getDb()
@@ -208,6 +244,11 @@ export const getCachedHomepage = unstable_cache(loadHomepage, ["homepage"], {
 export const getCachedCategories = unstable_cache(loadCategories, ["categories"], {
   revalidate: PUBLIC_CACHE_SECONDS,
   tags: [cacheTags.categories, cacheTags.catalog],
+});
+
+export const getCachedAccessibility = unstable_cache(loadAccessibility, ["accessibility"], {
+  revalidate: PUBLIC_CACHE_SECONDS,
+  tags: [cacheTags.accessibility],
 });
 
 export const getCachedContactFields = unstable_cache(loadContactFields, ["contact"], {

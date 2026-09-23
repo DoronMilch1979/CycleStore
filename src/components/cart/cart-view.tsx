@@ -37,7 +37,7 @@ export function CartView() {
     return (
       <div className="space-y-4">
         <p>העגלה ריקה.</p>
-        <Link href="/" className="text-primary">
+        <Link href="/" className="text-link">
           חזרה לחנות
         </Link>
       </div>
@@ -66,7 +66,7 @@ export function CartView() {
               <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0 space-y-1">
                 {line.slug ? (
-                  <Link href={`/products/${line.slug}`} className="font-semibold">
+                  <Link href={`/products/${line.slug}`} className="text-link font-semibold">
                     {line.name}
                   </Link>
                 ) : (
@@ -111,6 +111,7 @@ export function CartView() {
                 <Button
                   variant="secondary"
                   className="min-h-11"
+                  aria-label={`הסרת ${line.name} מהעגלה`}
                   onClick={() => removeItem(line.productId)}
                 >
                   הסרה

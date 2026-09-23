@@ -20,7 +20,7 @@ export function ProductBreadcrumbs({
             ) : null}
             <Link
               href={`/categories/${category.slug}`}
-              className="hover:text-primary hover:underline"
+              className="text-link hover:text-primary"
             >
               {category.name}
             </Link>

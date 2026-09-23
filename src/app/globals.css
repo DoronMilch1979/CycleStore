@@ -94,3 +94,13 @@ img {
 .skip-link:focus {
   top: 1rem;
 }
+
+.text-link {
+  color: var(--color-primary);
+  text-decoration-line: underline;
+  text-underline-offset: 0.18em;
+}
+
+.text-link:hover {
+  color: var(--color-primary-hover);
+}

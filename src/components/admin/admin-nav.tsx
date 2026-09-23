@@ -7,6 +7,7 @@ const NAV = [
     items: [
       { href: "/admin/content/homepage" as const, label: "עריכת מסך הבית" },
       { href: "/admin/content/contact" as const, label: "עריכת פרטי קשר" },
+      { href: "/admin/content/accessibility" as const, label: "הצהרת נגישות" },
       { href: "/admin/content/branding" as const, label: "מיתוג ובאנרים" },
     ],
   },

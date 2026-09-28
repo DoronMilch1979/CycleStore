@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useSyncExternalStore,
+} from "react";
 import { CART_STORAGE_KEY } from "@/config/site";
 import { MAX_PUBLIC_LINE_QUANTITY } from "@/domain/cart/limits";
 import {
@@ -63,6 +69,10 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+export function readGuestCart(): GuestCart {
+  return readCart();
+}
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const cart = useSyncExternalStore(subscribe, readCart, getServerSnapshot);
 
@@ -100,7 +110,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             nextQuantity <= 0
               ? current.items.filter((item) => item.productId !== productId)
               : current.items.map((item) =>
-                  item.productId === productId ? { ...item, quantity: nextQuantity } : item,
+                  item.productId === productId
+                    ? { ...item, quantity: nextQuantity }
+                    : item,
                 ),
         }));
       },

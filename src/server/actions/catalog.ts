@@ -5,7 +5,12 @@ import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { products } from "@/db/schema/catalog";
 import { CONTACT_FIELD_TYPES } from "@/config/store-content";
-import { banners, brandingSettings, contactFields, siteSettings } from "@/db/schema/content";
+import {
+  banners,
+  brandingSettings,
+  contactFields,
+  siteSettings,
+} from "@/db/schema/content";
 import { ACCESSIBILITY_SETTINGS_KEY } from "@/domain/content/accessibility-statement";
 import {
   createCategory,
@@ -34,6 +39,7 @@ import { assertSafeImageUpload, getMediaStorage } from "@/domain/media/storage";
 import { cacheTags } from "@/lib/cache-tags";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { requireAdminSession } from "@/server/authz";
+import { revalidatePublicCatalog } from "@/server/revalidate-public";
 
 const CONTACT_FIELD_TYPE_VALUES = new Set<string>(
   CONTACT_FIELD_TYPES.map((type) => type.value),
@@ -52,12 +58,8 @@ function revalidateContact() {
   revalidatePath("/accessibility");
 }
 
-function revalidateCatalog() {
-  updateTag(cacheTags.catalog);
-  updateTag(cacheTags.categories);
-  revalidatePath("/");
-  revalidatePath("/categories", "layout");
-  revalidatePath("/products", "layout");
+function revalidateCatalog(productSlugs?: Array<string | null | undefined>) {
+  revalidatePublicCatalog(productSlugs);
 }
 
 export async function createProductAction(formData: FormData) {
@@ -78,7 +80,7 @@ export async function createProductAction(formData: FormData) {
       },
       admin.userId,
     );
-    revalidateCatalog();
+    revalidateCatalog([product.slug]);
     return { ok: true as const, id: product.id };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };
@@ -89,8 +91,14 @@ export async function updateProductAction(productId: string, formData: FormData)
   try {
     const admin = await requireAdminSession();
     const categoryIds = formData.getAll("categoryIds").map(String).filter(Boolean);
-    await updateProduct(
-      getDb(),
+    const db = getDb();
+    const [before] = await db
+      .select({ slug: products.slug })
+      .from(products)
+      .where(eq(products.id, productId))
+      .limit(1);
+    const updated = await updateProduct(
+      db,
       productId,
       {
         name: String(formData.get("name") ?? ""),
@@ -104,7 +112,7 @@ export async function updateProductAction(productId: string, formData: FormData)
       },
       admin.userId,
     );
-    revalidateCatalog();
+    revalidateCatalog([before?.slug, updated.slug]);
     updateTag(cacheTags.product(productId));
     return { ok: true as const };
   } catch (error) {
@@ -118,19 +126,22 @@ export async function updateStockAction(formData: FormData) {
     const productId = String(formData.get("productId") ?? "");
     const newQuantity = Number(formData.get("stockQuantity") ?? 0);
     const price = formData.get("price");
-    await setStockQuantity(getDb(), {
+    const db = getDb();
+    const [existing] = await db
+      .select({
+        slug: products.slug,
+        discountPriceAmount: products.discountPriceAmount,
+      })
+      .from(products)
+      .where(eq(products.id, productId))
+      .limit(1);
+    await setStockQuantity(db, {
       productId,
       newQuantity,
       actorUserId: admin.userId,
       reason: String(formData.get("reason") ?? "עדכון מלאי"),
     });
     if (typeof price === "string" && price.length > 0) {
-      const db = getDb();
-      const [existing] = await db
-        .select({ discountPriceAmount: products.discountPriceAmount })
-        .from(products)
-        .where(eq(products.id, productId))
-        .limit(1);
       await updateProduct(
         db,
         productId,
@@ -149,7 +160,7 @@ export async function updateStockAction(formData: FormData) {
         admin.userId,
       );
     }
-    revalidateCatalog();
+    revalidateCatalog([existing?.slug]);
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };
@@ -197,7 +208,10 @@ export async function moveCategoryAction(formData: FormData) {
   }
 }
 
-export async function reorderCategoryAction(categoryId: string, direction: "up" | "down") {
+export async function reorderCategoryAction(
+  categoryId: string,
+  direction: "up" | "down",
+) {
   try {
     await requireAdminSession();
     await moveCategoryOrder(getDb(), categoryId, direction);
@@ -320,7 +334,9 @@ export async function saveAccessibilitySettingsAction(formData: FormData) {
   try {
     await requireAdminSession();
     const value = {
-      contactName: String(formData.get("contactName") ?? "").trim().slice(0, 120),
+      contactName: String(formData.get("contactName") ?? "")
+        .trim()
+        .slice(0, 120),
       premisesAccessibility: String(formData.get("premisesAccessibility") ?? "")
         .trim()
         .slice(0, 4000),

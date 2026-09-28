@@ -31,11 +31,15 @@ function createClient() {
     databaseUrl.includes("127.0.0.1") ||
     databaseUrl.includes("build-placeholder");
 
+  const pooled = databaseUrl.includes("-pooler");
+
   return postgres(databaseUrl, {
-    max: env.NODE_ENV === "production" ? 3 : 10,
+    max: env.NODE_ENV === "production" ? 1 : 10,
     idle_timeout: 20,
     connect_timeout: 15,
     ssl: isLocal ? false : "require",
+    // Transaction-mode poolers reject prepared statements. Local Postgres keeps them.
+    prepare: pooled ? false : true,
   });
 }
 
@@ -47,10 +51,10 @@ export function getDb(): AppDatabase {
   const client = globalForDb.postgresClient ?? createClient();
   const db = drizzle(client, { schema }) as AppDatabase;
 
-  if (env.NODE_ENV !== "production") {
-    globalForDb.postgresClient = client;
-    globalForDb.drizzleDb = db;
-  }
+  // One client per server instance, including production. A fresh pool on every
+  // call opens new TCP connections to Neon and is what makes Vercel feel slow.
+  globalForDb.postgresClient = client;
+  globalForDb.drizzleDb = db;
 
   return db;
 }

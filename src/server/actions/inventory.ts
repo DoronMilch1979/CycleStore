@@ -1,7 +1,7 @@
 "use server";
 
 import { eq } from "drizzle-orm";
-import { revalidatePath, updateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { getDb } from "@/db";
 import { products } from "@/db/schema/catalog";
 import { setStockQuantity } from "@/domain/inventory/stock-service";
@@ -12,9 +12,9 @@ import {
   parseAdminDiscount,
   parseAdminPrice,
 } from "@/domain/pricing";
-import { cacheTags } from "@/lib/cache-tags";
 import { toPublicErrorMessage } from "@/lib/errors";
 import { requireAdminSession } from "@/server/authz";
+import { revalidatePublicCatalog } from "@/server/revalidate-public";
 
 export async function updateStockRowAction(input: {
   productId: string;
@@ -45,7 +45,8 @@ export async function updateStockRowAction(input: {
     });
 
     const priceChanged = existing.priceAmount !== moneyToDb(price);
-    const discountChanged = (existing.discountPriceAmount ?? null) !== discountToDb(discount);
+    const discountChanged =
+      (existing.discountPriceAmount ?? null) !== discountToDb(discount);
     if (priceChanged || discountChanged) {
       const { productCategories } = await import("@/db/schema/catalog");
       const links = await db
@@ -70,9 +71,8 @@ export async function updateStockRowAction(input: {
       );
     }
 
-    updateTag(cacheTags.catalog);
+    revalidatePublicCatalog([existing.slug]);
     revalidatePath("/admin/inventory");
-    revalidatePath("/");
     return { ok: true as const };
   } catch (error) {
     return { ok: false as const, error: toPublicErrorMessage(error) };

@@ -47,31 +47,47 @@ export function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
   }
 
   return (
-    <div className="relative h-[min(48vh,22rem)] w-full overflow-hidden bg-surface-muted sm:h-[min(70vh,36rem)]">
+    <div className="bg-surface-muted relative h-[min(48vh,22rem)] w-full overflow-hidden sm:h-[min(70vh,36rem)]">
       {slides.map((slide, slideIndex) => {
         const isActive = slideIndex === activeIndex;
+        const previousIndex = (activeIndex - 1 + slides.length) % slides.length;
+        const nextIndex = (activeIndex + 1) % slides.length;
+        const shouldLoad =
+          slideIndex === activeIndex ||
+          slideIndex === previousIndex ||
+          slideIndex === nextIndex;
         return (
           <div
             key={`${slide.url}-${slideIndex}`}
             aria-hidden={isActive ? undefined : true}
-            className={cn("absolute inset-0", fade && "transition-opacity duration-700 ease-in-out")}
+            className={cn(
+              "absolute inset-0",
+              fade && "transition-opacity duration-700 ease-in-out",
+            )}
             style={{ opacity: isActive ? 1 : 0, zIndex: isActive ? 1 : 0 }}
           >
-            <Image
-              src={slide.url}
-              alt={isActive ? slide.alt : ""}
-              fill
-              priority={slideIndex === initialIndex}
-              loading={slideIndex === initialIndex ? undefined : "eager"}
-              sizes="100vw"
-              className="object-cover"
-            />
+            {shouldLoad ? (
+              <Image
+                src={slide.url}
+                alt={isActive ? slide.alt : ""}
+                fill
+                sizes="100vw"
+                className="object-cover"
+                {...(isActive && slideIndex === initialIndex
+                  ? { priority: true }
+                  : { loading: isActive ? ("eager" as const) : ("lazy" as const) })}
+              />
+            ) : null}
           </div>
         );
       })}
       {canNavigate ? (
-        <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-center gap-2 bg-surface/95 px-3 py-2 text-foreground">
-          <button type="button" className="text-link min-h-11 cursor-pointer border-0 bg-transparent px-2" onClick={() => step(-1)}>
+        <div className="bg-surface/95 text-foreground absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-center justify-center gap-2 px-3 py-2">
+          <button
+            type="button"
+            className="text-link min-h-11 cursor-pointer border-0 bg-transparent px-2"
+            onClick={() => step(-1)}
+          >
             השקופית הקודמת
           </button>
           {reducedMotion ? null : (
@@ -84,7 +100,11 @@ export function HeroSlideshow({ slides }: { slides: HeroSlide[] }) {
               {paused ? "הפעלת המצגת" : "עצירת המצגת"}
             </button>
           )}
-          <button type="button" className="text-link min-h-11 cursor-pointer border-0 bg-transparent px-2" onClick={() => step(1)}>
+          <button
+            type="button"
+            className="text-link min-h-11 cursor-pointer border-0 bg-transparent px-2"
+            onClick={() => step(1)}
+          >
             השקופית הבאה
           </button>
           <p aria-live="polite" className="min-w-0 text-sm">

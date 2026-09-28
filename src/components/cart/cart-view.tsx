@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Price, ProductPrice } from "@/components/ui/price";
 import { QuantityStepper } from "@/components/storefront/quantity-stepper";
 import { useCart } from "@/components/cart/cart-provider";
-import { assertGuestCartQuantity, revalidateGuestCart } from "@/server/actions/cart";
+import { useConfirmedQuantity } from "@/components/cart/use-confirmed-quantity";
+import { revalidateGuestCart } from "@/server/actions/cart";
 import type { ValidatedCart } from "@/domain/cart/types";
 
 export function CartView() {
-  const { cart, setQuantity, removeItem, clear } = useCart();
+  const { cart, removeItem, clear } = useCart();
   const [validated, setValidated] = useState<ValidatedCart | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -51,10 +52,10 @@ export function CartView() {
         {validated.lines.map((line) => (
           <li
             key={line.productId}
-            className="rounded-[var(--radius-md)] border border-border bg-surface p-4"
+            className="border-border bg-surface rounded-[var(--radius-md)] border p-4"
           >
             <div className="flex items-start gap-3">
-              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)] bg-surface-muted">
+              <div className="bg-surface-muted relative h-16 w-16 shrink-0 overflow-hidden rounded-[var(--radius-md)]">
                 <Image
                   src={line.imageUrl ?? PLACEHOLDER_PRODUCT_SRC}
                   alt=""
@@ -64,59 +65,50 @@ export function CartView() {
                 />
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                {line.slug ? (
-                  <Link href={`/products/${line.slug}`} className="text-link font-semibold">
-                    {line.name}
-                  </Link>
-                ) : (
-                  <p className="font-semibold">{line.name}</p>
-                )}
-                <p>
-                  מחיר ליחידה:{" "}
-                  <ProductPrice
-                    priceAmount={line.regularPrice}
-                    discountPriceAmount={line.discountPrice}
+                <div className="min-w-0 space-y-1">
+                  {line.slug ? (
+                    <Link
+                      href={`/products/${line.slug}`}
+                      className="text-link font-semibold"
+                    >
+                      {line.name}
+                    </Link>
+                  ) : (
+                    <p className="font-semibold">{line.name}</p>
+                  )}
+                  <p>
+                    מחיר ליחידה:{" "}
+                    <ProductPrice
+                      priceAmount={line.regularPrice}
+                      discountPriceAmount={line.discountPrice}
+                    />
+                  </p>
+                  <p>
+                    סה״כ: <Price amount={line.lineTotal} />
+                  </p>
+                  {line.issue === "insufficient_stock" ? (
+                    <p className="text-danger text-sm">הכמות בעגלה גבוהה מהזמין כרגע.</p>
+                  ) : null}
+                  {line.issue === "unavailable" || line.issue === "inactive" ? (
+                    <p className="text-danger text-sm">המוצר אינו זמין כרגע.</p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CartLineQuantity
+                    productId={line.productId}
+                    name={line.name}
+                    quantity={line.quantity}
+                    maxQuantity={line.maxQuantity}
                   />
-                </p>
-                <p>
-                  סה״כ: <Price amount={line.lineTotal} />
-                </p>
-                {line.issue === "insufficient_stock" ? (
-                  <p className="text-sm text-danger">הכמות בעגלה גבוהה מהזמין כרגע.</p>
-                ) : null}
-                {line.issue === "unavailable" || line.issue === "inactive" ? (
-                  <p className="text-sm text-danger">המוצר אינו זמין כרגע.</p>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <QuantityStepper
-                  label={`כמות עבור ${line.name}`}
-                  size="comfortable"
-                  value={line.quantity}
-                  min={1}
-                  max={Math.max(line.maxQuantity, 1)}
-                  disabled={line.maxQuantity <= 0}
-                  onChange={(next) => {
-                    startTransition(async () => {
-                      const result = await assertGuestCartQuantity(line.productId, next);
-                      if (!result.ok) {
-                        setError(result.message);
-                        return;
-                      }
-                      setQuantity(line.productId, next);
-                    });
-                  }}
-                />
-                <Button
-                  variant="secondary"
-                  className="min-h-11"
-                  aria-label={`הסרת ${line.name} מהעגלה`}
-                  onClick={() => removeItem(line.productId)}
-                >
-                  הסרה
-                </Button>
-              </div>
+                  <Button
+                    variant="secondary"
+                    className="min-h-11"
+                    aria-label={`הסרת ${line.name} מהעגלה`}
+                    onClick={() => removeItem(line.productId)}
+                  >
+                    הסרה
+                  </Button>
+                </div>
               </div>
             </div>
           </li>
@@ -125,10 +117,44 @@ export function CartView() {
       <p className="text-xl font-semibold">
         סה״כ לתשלום: <Price amount={validated.subtotal} />
       </p>
-      <p className="text-muted">הזמנה ותשלום יתווספו בגרסה הבאה. אין אפשרות תשלום כרגע.</p>
+      <p className="text-muted">
+        הזמנה ותשלום יתווספו בגרסה הבאה. אין אפשרות תשלום כרגע.
+      </p>
       <Button variant="secondary" className="min-h-11" onClick={clear}>
         ריקון העגלה
       </Button>
+    </div>
+  );
+}
+
+function CartLineQuantity({
+  productId,
+  name,
+  quantity,
+  maxQuantity,
+}: {
+  productId: string;
+  name: string;
+  quantity: number;
+  maxQuantity: number;
+}) {
+  const { commit, error } = useConfirmedQuantity(productId);
+  return (
+    <div className="space-y-1">
+      <QuantityStepper
+        label={`כמות עבור ${name}`}
+        size="comfortable"
+        value={quantity}
+        min={1}
+        max={Math.max(maxQuantity, 1)}
+        disabled={maxQuantity <= 0}
+        onChange={(next) => commit(next)}
+      />
+      {error ? (
+        <p role="alert" className="text-danger text-sm">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

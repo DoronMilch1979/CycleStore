@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, exists, inArray, or, sql, type AnyColumn } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  inArray,
+  or,
+  sql,
+  type AnyColumn,
+} from "drizzle-orm";
 import {
   categories,
   categoryClosure,
@@ -120,7 +130,10 @@ export async function listProductsInCategoryTree(db: AppDatabase, categoryId: st
       imageAlt: media.altText,
     })
     .from(categoryClosure)
-    .innerJoin(productCategories, eq(productCategories.categoryId, categoryClosure.descendantId))
+    .innerJoin(
+      productCategories,
+      eq(productCategories.categoryId, categoryClosure.descendantId),
+    )
     .innerJoin(products, eq(products.id, productCategories.productId))
     .leftJoin(
       productImages,
@@ -151,7 +164,11 @@ export async function getCategoryBySlug(db: AppDatabase, slug: string) {
 }
 
 export async function getProductBySlug(db: AppDatabase, slug: string) {
-  const [product] = await db.select().from(products).where(eq(products.slug, slug)).limit(1);
+  const [product] = await db
+    .select()
+    .from(products)
+    .where(eq(products.slug, slug))
+    .limit(1);
   return product ?? null;
 }
 
@@ -200,22 +217,35 @@ export async function getProductCategoryPath(
   db: AppDatabase,
   productId: string,
 ): Promise<CategoryBreadcrumb[]> {
-  const assigned = await db
+  const rows = await db
     .select({
       categoryId: productCategories.categoryId,
+      name: categories.name,
+      slug: categories.slug,
+      isActive: categories.isActive,
+      depth: categoryClosure.depth,
     })
     .from(productCategories)
-    .where(eq(productCategories.productId, productId));
+    .innerJoin(
+      categoryClosure,
+      eq(categoryClosure.descendantId, productCategories.categoryId),
+    )
+    .innerJoin(categories, eq(categories.id, categoryClosure.ancestorId))
+    .where(eq(productCategories.productId, productId))
+    .orderBy(desc(categoryClosure.depth));
 
-  let best: CategoryBreadcrumb[] = [];
-
-  for (const row of assigned) {
-    const crumbs = await getCategoryBreadcrumbPath(db, row.categoryId);
-    if (crumbs.length > best.length) {
-      best = crumbs;
-    }
+  const byCategory = new Map<string, CategoryBreadcrumb[]>();
+  for (const row of rows) {
+    if (!row.isActive) continue;
+    const crumbs = byCategory.get(row.categoryId) ?? [];
+    crumbs.push({ name: row.name, slug: row.slug });
+    byCategory.set(row.categoryId, crumbs);
   }
 
+  let best: CategoryBreadcrumb[] = [];
+  for (const crumbs of byCategory.values()) {
+    if (crumbs.length > best.length) best = crumbs;
+  }
   return best;
 }
 
@@ -238,7 +268,10 @@ export async function searchPublicProducts(db: AppDatabase, rawQuery: string) {
   const categoryMatch = db
     .select({ id: productCategories.productId })
     .from(productCategories)
-    .innerJoin(categoryClosure, eq(categoryClosure.descendantId, productCategories.categoryId))
+    .innerJoin(
+      categoryClosure,
+      eq(categoryClosure.descendantId, productCategories.categoryId),
+    )
     .innerJoin(categories, eq(categories.id, categoryClosure.ancestorId))
     .where(
       and(

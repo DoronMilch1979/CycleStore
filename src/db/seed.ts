@@ -10,7 +10,12 @@ import {
 } from "@/config/store-content";
 import { getDb } from "@/db";
 import { categories, products } from "@/db/schema/catalog";
-import { banners, brandingSettings, contactFields, homepageContent } from "@/db/schema/content";
+import {
+  banners,
+  brandingSettings,
+  contactFields,
+  homepageContent,
+} from "@/db/schema/content";
 import { user } from "@/db/schema/auth";
 import { userProfiles } from "@/db/schema/profiles";
 import { createCategory } from "@/domain/catalog/category-service";
@@ -68,7 +73,8 @@ const DEMO_PRODUCTS = [
     categoryName: "אופניים חשמליים",
     price: "9490.00",
     stockQuantity: 1,
-    description: "אופניים חשמליים לשבילים, עם מתלה וטווח סוללה לרכיבות ארוכות. דגם הדגמה.",
+    description:
+      "אופניים חשמליים לשבילים, עם מתלה וטווח סוללה לרכיבות ארוכות. דגם הדגמה.",
   },
   {
     name: "אופני ילדים 16 אינץ׳",
@@ -218,7 +224,8 @@ async function seedCms(db: AppDatabase) {
     });
 
   for (const field of STORE_CONTACT_DEFAULTS) {
-    const isActive = "isActive" in field ? Boolean(field.isActive) : field.value.trim().length > 0;
+    const isActive =
+      "isActive" in field ? Boolean(field.isActive) : field.value.trim().length > 0;
     await db
       .insert(contactFields)
       .values({
@@ -226,6 +233,7 @@ async function seedCms(db: AppDatabase) {
         fieldType: field.fieldType,
         label: field.label,
         value: field.value,
+        linkUrl: "linkUrl" in field ? field.linkUrl : null,
         sortOrder: field.sortOrder,
         isActive,
       })
@@ -235,6 +243,7 @@ async function seedCms(db: AppDatabase) {
           fieldType: field.fieldType,
           label: field.label,
           value: field.value,
+          linkUrl: "linkUrl" in field ? field.linkUrl : null,
           sortOrder: field.sortOrder,
           isActive,
           updatedAt: new Date(),
@@ -343,7 +352,10 @@ export async function seedDatabase() {
   logger.info("Database seed completed");
 }
 
-if (import.meta.url === `file://${process.argv[1].replaceAll("\\", "/")}` || process.argv[1]?.endsWith("seed.ts")) {
+if (
+  import.meta.url === `file://${process.argv[1].replaceAll("\\", "/")}` ||
+  process.argv[1]?.endsWith("seed.ts")
+) {
   seedDatabase()
     .then(() => process.exit(0))
     .catch((error) => {

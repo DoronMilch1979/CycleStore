@@ -6,7 +6,14 @@ export const STORE_STORY = `מרכז האופניים רמת ישי הוא חנ�
 
 export const STORE_HERO_ALT = "מרכז האופניים רמת ישי — אולם תצוגה וסדנת אופניים";
 
-export const STORE_FACEBOOK_URL = "https://www.facebook.com/profile.php?id=100054554553973";
+export const STORE_FACEBOOK_URL =
+  "https://www.facebook.com/profile.php?id=100054554553973";
+
+export const STORE_MAPS_URL = "https://maps.app.goo.gl/4UE2DzU8t2Zh2wzQ8";
+
+export function isGoogleMapsShortLink(value: string) {
+  return /^https:\/\/maps\.app\.goo\.gl\/[A-Za-z0-9_-]+$/.test(value.trim());
+}
 
 export const CONTACT_FIELD_TYPES = [
   { value: "text", label: "טקסט" },
@@ -19,12 +26,36 @@ export const CONTACT_FIELD_TYPES = [
   { value: "hours", label: "שעות פתיחה" },
 ] as const;
 
+const SOCIAL_CONTACT_TYPES = ["facebook", "whatsapp"] as const;
+
+export type SocialContactType = (typeof SOCIAL_CONTACT_TYPES)[number];
+
+export const SELECTABLE_CONTACT_FIELD_TYPES = CONTACT_FIELD_TYPES.filter(
+  (type) => type.value !== "facebook" && type.value !== "whatsapp",
+);
+
+export function socialContactType(field: {
+  fieldKey: string;
+  fieldType: string;
+}): SocialContactType | null {
+  if (field.fieldKey === "facebook" || field.fieldKey === "whatsapp")
+    return field.fieldKey;
+  if (field.fieldType === "facebook" || field.fieldType === "whatsapp")
+    return field.fieldType;
+  return null;
+}
+
+export function contactFieldTypeLabel(fieldType: string) {
+  return CONTACT_FIELD_TYPES.find((type) => type.value === fieldType)?.label ?? fieldType;
+}
+
 export const STORE_CONTACT_DEFAULTS = [
   {
     fieldKey: "address",
     fieldType: "address",
     label: "כתובת",
     value: "חורש האלונים, אזור התעשייה רמת ישי 3009503 (צמוד לנעלי הקיבוצים)",
+    linkUrl: STORE_MAPS_URL,
     sortOrder: 10,
   },
   {

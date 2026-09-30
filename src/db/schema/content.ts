@@ -18,7 +18,9 @@ export const homepageContent = pgTable(
   {
     id: integer("id").primaryKey().default(1),
     storyText: text("story_text").notNull().default(""),
-    heroMediaId: uuid("hero_media_id").references(() => media.id, { onDelete: "set null" }),
+    heroMediaId: uuid("hero_media_id").references(() => media.id, {
+      onDelete: "set null",
+    }),
     heroAlt: text("hero_alt").notNull().default(""),
     heroDisplay: text("hero_display").notNull().default("slideshow"),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
@@ -58,7 +60,9 @@ export const brandingSettings = pgTable(
   {
     id: integer("id").primaryKey().default(1),
     storeName: text("store_name").notNull(),
-    logoMediaId: uuid("logo_media_id").references(() => media.id, { onDelete: "set null" }),
+    logoMediaId: uuid("logo_media_id").references(() => media.id, {
+      onDelete: "set null",
+    }),
     logoAlt: text("logo_alt").notNull().default(""),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -83,6 +87,7 @@ export const contactFields = pgTable(
     fieldType: text("field_type").notNull(),
     label: text("label").notNull(),
     value: text("value").notNull().default(""),
+    linkUrl: text("link_url"),
     sortOrder: integer("sort_order").notNull().default(0),
     isActive: boolean("is_active").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
@@ -116,6 +121,10 @@ export const banners = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("banners_location_sort_idx").on(table.location, table.sortOrder, table.id),
+    uniqueIndex("banners_location_sort_idx").on(
+      table.location,
+      table.sortOrder,
+      table.id,
+    ),
   ],
 );

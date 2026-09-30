@@ -1,0 +1,2 @@
+ALTER TABLE "contact_fields" ADD COLUMN "link_url" text;--> statement-breakpoint
+UPDATE "contact_fields" SET "link_url" = 'https://maps.app.goo.gl/4UE2DzU8t2Zh2wzQ8' WHERE "field_key" = 'address' AND "link_url" IS NULL;

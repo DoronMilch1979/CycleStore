@@ -4,7 +4,11 @@ import { revalidatePath, updateTag } from "next/cache";
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { products } from "@/db/schema/catalog";
-import { CONTACT_FIELD_TYPES } from "@/config/store-content";
+import {
+  CONTACT_FIELD_TYPES,
+  isGoogleMapsShortLink,
+  socialContactType,
+} from "@/config/store-content";
 import {
   banners,
   brandingSettings,
@@ -50,6 +54,18 @@ function readContactFieldType(value: FormDataEntryValue | null) {
   if (CONTACT_FIELD_TYPE_VALUES.has(type)) return type;
   if (/^[a-z][a-z0-9-]{0,31}$/.test(type)) return type;
   return "text";
+}
+
+function readAddressLink(fieldType: string, value: FormDataEntryValue | null) {
+  if (fieldType !== "address") return { linkUrl: null };
+  const link = String(value ?? "").trim();
+  if (!link) return { linkUrl: null };
+  if (!isGoogleMapsShortLink(link)) {
+    return {
+      error: "קישור המפה צריך להיות בפורמט https://maps.app.goo.gl/…",
+    };
+  }
+  return { linkUrl: link };
 }
 
 function revalidateContact() {
@@ -313,13 +329,41 @@ export async function saveContactFieldAction(formData: FormData) {
   try {
     await requireAdminSession();
     const id = String(formData.get("id") ?? "");
-    await getDb()
+    const db = getDb();
+    const [existing] = await db
+      .select({
+        fieldKey: contactFields.fieldKey,
+        fieldType: contactFields.fieldType,
+      })
+      .from(contactFields)
+      .where(eq(contactFields.id, id))
+      .limit(1);
+    if (!existing) {
+      return { ok: false as const, error: "השדה לא נמצא." };
+    }
+
+    const lockedType = socialContactType(existing);
+    const submittedType = readContactFieldType(formData.get("fieldType"));
+    if (!lockedType && socialContactType({ fieldKey: "", fieldType: submittedType })) {
+      return {
+        ok: false as const,
+        error: "לא ניתן לבחור פייסבוק או וואטסאפ לשדה זה.",
+      };
+    }
+    const fieldType = lockedType ?? submittedType;
+    const addressLink = readAddressLink(fieldType, formData.get("linkUrl"));
+    if ("error" in addressLink) {
+      return { ok: false as const, error: addressLink.error };
+    }
+
+    await db
       .update(contactFields)
       .set({
         label: String(formData.get("label") ?? ""),
         value: String(formData.get("value") ?? ""),
+        linkUrl: addressLink.linkUrl,
         isActive: formData.get("isActive") === "on",
-        fieldType: readContactFieldType(formData.get("fieldType")),
+        fieldType,
         updatedAt: new Date(),
       })
       .where(eq(contactFields.id, id));
@@ -371,6 +415,14 @@ export async function addContactFieldAction(formData: FormData) {
     if (!fieldKey) {
       return { ok: false as const, error: "יש להזין מפתח באנגלית." };
     }
+    const fieldType = readContactFieldType(formData.get("fieldType"));
+    if (socialContactType({ fieldKey, fieldType })) {
+      return { ok: false as const, error: "פייסבוק ווואטסאפ הם שדות קבועים." };
+    }
+    const addressLink = readAddressLink(fieldType, formData.get("linkUrl"));
+    if ("error" in addressLink) {
+      return { ok: false as const, error: addressLink.error };
+    }
     const db = getDb();
     const [latest] = await db
       .select({ sortOrder: contactFields.sortOrder })
@@ -379,9 +431,10 @@ export async function addContactFieldAction(formData: FormData) {
       .limit(1);
     await db.insert(contactFields).values({
       fieldKey,
-      fieldType: readContactFieldType(formData.get("fieldType")),
+      fieldType,
       label: String(formData.get("label") ?? ""),
       value: String(formData.get("value") ?? ""),
+      linkUrl: addressLink.linkUrl,
       isActive: formData.get("isActive") === "on",
       sortOrder: (latest?.sortOrder ?? -1) + 1,
     });

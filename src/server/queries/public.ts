@@ -3,7 +3,11 @@ import "server-only";
 import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { STORE_NAME } from "@/config/site";
-import { STORE_CONTACT_DEFAULTS, STORE_HERO_ALT, STORE_STORY } from "@/config/store-content";
+import {
+  STORE_CONTACT_DEFAULTS,
+  STORE_HERO_ALT,
+  STORE_STORY,
+} from "@/config/store-content";
 import {
   ACCESSIBILITY_SETTINGS_KEY,
   ACCESSIBILITY_STATEMENT_PUBLISHED_LABEL,
@@ -14,7 +18,11 @@ import {
 } from "@/domain/content/accessibility-statement";
 import { getDb } from "@/db";
 import { listCategoriesInDisplayOrder } from "@/domain/catalog/category-service";
-import { buildHeroSlides, parseHeroDisplayMode, type HeroDisplayMode } from "@/domain/content/hero-slides";
+import {
+  buildHeroSlides,
+  parseHeroDisplayMode,
+  type HeroDisplayMode,
+} from "@/domain/content/hero-slides";
 import { listHomepageImages } from "@/domain/content/store-images";
 import {
   banners,
@@ -37,6 +45,7 @@ export type PublicContactField = {
   fieldType: string;
   label: string;
   value: string;
+  linkUrl: string | null;
 };
 
 export type PublicCategory = {
@@ -87,9 +96,13 @@ const fallbackContactFields: PublicContactField[] = STORE_CONTACT_DEFAULTS.filte
   fieldType: field.fieldType,
   label: field.label,
   value: field.value,
+  linkUrl: "linkUrl" in field ? field.linkUrl : null,
 }));
 
-async function withDatabaseFallback<T>(fallback: T, loader: () => Promise<T>): Promise<T> {
+async function withDatabaseFallback<T>(
+  fallback: T,
+  loader: () => Promise<T>,
+): Promise<T> {
   if (!isDatabaseConfigured()) {
     return fallback;
   }
@@ -203,6 +216,7 @@ async function loadContactFields(): Promise<PublicContactField[]> {
         fieldType: contactFields.fieldType,
         label: contactFields.label,
         value: contactFields.value,
+        linkUrl: contactFields.linkUrl,
       })
       .from(contactFields)
       .where(and(eq(contactFields.isActive, true)))
@@ -246,10 +260,14 @@ export const getCachedCategories = unstable_cache(loadCategories, ["categories"]
   tags: [cacheTags.categories, cacheTags.catalog],
 });
 
-export const getCachedAccessibility = unstable_cache(loadAccessibility, ["accessibility"], {
-  revalidate: PUBLIC_CACHE_SECONDS,
-  tags: [cacheTags.accessibility],
-});
+export const getCachedAccessibility = unstable_cache(
+  loadAccessibility,
+  ["accessibility"],
+  {
+    revalidate: PUBLIC_CACHE_SECONDS,
+    tags: [cacheTags.accessibility],
+  },
+);
 
 export const getCachedContactFields = unstable_cache(loadContactFields, ["contact"], {
   revalidate: PUBLIC_CACHE_SECONDS,
